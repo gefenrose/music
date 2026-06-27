@@ -10,18 +10,24 @@ class MusicLibraryManager: ObservableObject {
     @Published var authorizationStatus: MPMediaLibraryAuthorizationStatus = .notDetermined
     @Published var isLoading = false
 
+    private static var documentsURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    private static let audioExtensions = Set(["mp3", "m4a", "aac", "wav", "aiff", "flac"])
+
     private init() {}
 
     func requestAuthorization() {
         authorizationStatus = MPMediaLibrary.authorizationStatus()
         guard authorizationStatus == .notDetermined else {
-            if authorizationStatus == .authorized { loadLibrary() }
+            loadLibrary()
             return
         }
         MPMediaLibrary.requestAuthorization { [weak self] status in
             DispatchQueue.main.async {
                 self?.authorizationStatus = status
-                if status == .authorized { self?.loadLibrary() }
+                self?.loadLibrary()
             }
         }
     }
@@ -29,17 +35,24 @@ class MusicLibraryManager: ObservableObject {
     func loadLibrary() {
         isLoading = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let query = MPMediaQuery.songs()
-            let items = query.items ?? []
-            let tracks = items.compactMap { item -> Track? in
-                guard item.assetURL != nil else { return nil }
-                return Track(item: item)
-            }.sorted { $0.title < $1.title }
+            // System music library (requires authorization)
+            var libraryTracks: [Track] = []
+            if MPMediaLibrary.authorizationStatus() == .authorized {
+                let items = MPMediaQuery.songs().items ?? []
+                libraryTracks = items.compactMap { item -> Track? in
+                    guard item.assetURL != nil else { return nil }
+                    return Track(item: item)
+                }
+            }
 
-            let albumDict = Dictionary(grouping: tracks, by: { $0.album + "|||" + $0.artist })
+            // Imported local files (always available)
+            let localTracks = Self.scanLocalFiles()
+
+            let allTracks = (libraryTracks + localTracks).sorted { $0.title < $1.title }
+
+            let albumDict = Dictionary(grouping: allTracks, by: { $0.album + "|||" + $0.artist })
             let albumGroups = albumDict.map { key, value -> AlbumGroup in
-                let parts = key.split(separator: "|", maxSplits: 3, omittingEmptySubsequences: false)
-                return AlbumGroup(
+                AlbumGroup(
                     id: key,
                     title: value.first?.album ?? "Unknown",
                     artist: value.first?.artist ?? "Unknown",
@@ -47,17 +60,54 @@ class MusicLibraryManager: ObservableObject {
                 )
             }.sorted { $0.title < $1.title }
 
-            let artistDict = Dictionary(grouping: tracks, by: { $0.artist })
+            let artistDict = Dictionary(grouping: allTracks, by: { $0.artist })
             let artistGroups = artistDict.map { name, value in
                 ArtistGroup(id: name, name: name, tracks: value.sorted { $0.title < $1.title })
             }.sorted { $0.name < $1.name }
 
             DispatchQueue.main.async {
-                self?.songs = tracks
+                self?.songs = allTracks
                 self?.albums = albumGroups
                 self?.artists = artistGroups
                 self?.isLoading = false
             }
         }
+    }
+
+    // Copy files from document picker URLs into app Documents, then reload.
+    func importFiles(from urls: [URL]) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            for url in urls {
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                let dest = Self.documentsURL.appendingPathComponent(url.lastPathComponent)
+                do {
+                    if FileManager.default.fileExists(atPath: dest.path) {
+                        try FileManager.default.removeItem(at: dest)
+                    }
+                    try FileManager.default.copyItem(at: url, to: dest)
+                } catch {
+                    print("Import failed for \(url.lastPathComponent): \(error)")
+                }
+            }
+            DispatchQueue.main.async { self?.loadLibrary() }
+        }
+    }
+
+    func deleteLocalFile(track: Track) {
+        guard let url = track.assetURL, track.id.hasPrefix("local:") else { return }
+        try? FileManager.default.removeItem(at: url)
+        loadLibrary()
+    }
+
+    private static func scanLocalFiles() -> [Track] {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: documentsURL,
+            includingPropertiesForKeys: nil,
+            options: .skipsHiddenFiles
+        )) ?? []
+        return files
+            .filter { audioExtensions.contains($0.pathExtension.lowercased()) }
+            .map { Track(fileURL: $0) }
     }
 }

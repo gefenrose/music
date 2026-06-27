@@ -4,9 +4,8 @@ import MediaPlayer
 // MARK: - Album detail header (async art load)
 
 private struct AlbumDetailHeaderView: View {
-    let artwork: MPMediaItemArtwork
+    let track: Track
     let title: String
-    let albumId: String
     @State private var img: UIImage?
 
     var body: some View {
@@ -25,8 +24,8 @@ private struct AlbumDetailHeaderView: View {
                 .lineLimit(1)
                 .padding(.bottom, 4)
         }
-        .task(id: albumId) {
-            img = artwork.image(at: CGSize(width: 200, height: 200))
+        .task(id: track.id) {
+            img = track.artworkImage(size: CGSize(width: 200, height: 200))
         }
     }
 }
@@ -34,9 +33,8 @@ private struct AlbumDetailHeaderView: View {
 // MARK: - Album thumbnail (loads image once, off the render hot-path)
 
 private struct AlbumThumbView: View {
-    let artwork: MPMediaItemArtwork
-    let albumId: String
-    @State private var img: UIImage? = nil
+    let track: Track
+    @State private var img: UIImage?
 
     var body: some View {
         Group {
@@ -50,8 +48,8 @@ private struct AlbumThumbView: View {
         }
         .frame(width: 40, height: 40)
         .clipShape(RoundedRectangle(cornerRadius: 4))
-        .task(id: albumId) {
-            img = artwork.image(at: CGSize(width: 80, height: 80))
+        .task(id: track.id) {
+            img = track.artworkImage(size: CGSize(width: 80, height: 80))
         }
     }
 }
@@ -147,7 +145,9 @@ struct iPodClassicView: View {
         .background(Color.black)
         .ignoresSafeArea()
         .sheet(isPresented: $showSettings) {
-            SettingsView().environmentObject(lastFM)
+            SettingsView()
+                .environmentObject(lastFM)
+                .environmentObject(library)
         }
         .onChange(of: currentPage) { _, _ in
             if selectedIndices[currentPage] == nil { selectedIndices[currentPage] = 0 }
@@ -212,23 +212,23 @@ struct iPodClassicView: View {
     func albumDetailHeader() -> some View {
         if case .albumDetail(let id) = currentPage,
            let album = library.albums.first(where: { $0.id == id }),
-           let artwork = album.artwork {
-            AlbumDetailHeaderView(artwork: artwork, title: album.title, albumId: album.id)
+           let firstTrack = album.tracks.first {
+            AlbumDetailHeaderView(track: firstTrack, title: album.title)
         }
     }
 
     // MARK: - Artwork lookup
 
-    func albumForRow(_ index: Int) -> AlbumGroup? {
+    func firstTrackForRow(_ index: Int) -> Track? {
         guard case .albums = currentPage, index < library.albums.count else { return nil }
-        return library.albums[index]
+        return library.albums[index].tracks.first
     }
 
     // MARK: - Menu row
 
     func menuRow(item: MenuItem, index: Int) -> some View {
         let sel      = index == selectedIndex
-        let album    = albumForRow(index)
+        let album    = firstTrackForRow(index)
         return ZStack(alignment: .bottom) {
             // Row background
             if sel {
@@ -245,8 +245,8 @@ struct iPodClassicView: View {
                         .foregroundColor(sel ? .white : .black)
                         .frame(width: 28)
                 }
-                if let album, let art = album.artwork {
-                    AlbumThumbView(artwork: art, albumId: album.id)
+                if let firstTrack = album {
+                    AlbumThumbView(track: firstTrack)
                 }
                 Text(item.title)
                     .font(.system(size: 20, weight: .bold))

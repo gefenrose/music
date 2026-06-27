@@ -197,6 +197,9 @@ class AudioPlayerService: NSObject, ObservableObject {
         ]
         if let artwork = track.artwork {
             info[MPMediaItemPropertyArtwork] = artwork
+        } else if let img = track.localArtwork {
+            let mpArt = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
+            info[MPMediaItemPropertyArtwork] = mpArt
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
