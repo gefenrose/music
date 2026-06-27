@@ -136,6 +136,7 @@ struct iPodClassicView: View {
                             .padding(.top, 40)
                             .tint(Color(red: 0.25, green: 0.55, blue: 0.88))
                     } else {
+                        albumDetailHeader()
                         ForEach(Array(menuItems.enumerated()), id: \.offset) { idx, item in
                             menuRow(item: item, index: idx).id(idx)
                         }
@@ -149,10 +150,44 @@ struct iPodClassicView: View {
         }
     }
 
+    // MARK: - Album detail header (art + title shown above track list)
+
+    @ViewBuilder
+    func albumDetailHeader() -> some View {
+        if case .albumDetail(let id) = currentPage,
+           let album = library.albums.first(where: { $0.id == id }),
+           let img   = album.artwork?.image(at: CGSize(width: 320, height: 320)) {
+            VStack(spacing: 6) {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                Text(album.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .padding(.bottom, 4)
+            }
+        }
+    }
+
+    // MARK: - Artwork lookup
+
+    func albumArtwork(for index: Int) -> MPMediaItemArtwork? {
+        switch currentPage {
+        case .albums:
+            return index < library.albums.count ? library.albums[index].artwork : nil
+        default:
+            return nil
+        }
+    }
+
     // MARK: - Menu row
 
     func menuRow(item: MenuItem, index: Int) -> some View {
-        let sel = index == selectedIndex
+        let sel      = index == selectedIndex
+        let artwork  = albumArtwork(for: index)
         return ZStack(alignment: .bottom) {
             // Row background
             if sel {
@@ -162,12 +197,20 @@ struct iPodClassicView: View {
             }
 
             // Content
-            HStack(spacing: 14) {
+            HStack(spacing: 10) {
                 if let icon = item.icon {
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(sel ? .white : .black)
                         .frame(width: 28)
+                }
+                if let art = artwork,
+                   let img = art.image(at: CGSize(width: 80, height: 80)) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
                 Text(item.title)
                     .font(.system(size: 20, weight: .bold))
