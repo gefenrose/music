@@ -1,183 +1,139 @@
 import SwiftUI
 
 struct ClickWheelView: View {
-    var onMenu: () -> Void
-    var onPrevious: () -> Void
-    var onNext: () -> Void
+    var onMenu:      () -> Void
+    var onPrevious:  () -> Void
+    var onNext:      () -> Void
     var onPlayPause: () -> Void
-    var onCenter: () -> Void
-    var onScroll: (CGFloat) -> Void
+    var onCenter:    () -> Void
+    var onScroll:    (CGFloat) -> Void
 
-    @State private var lastAngle: CGFloat? = nil
+    @State private var lastAngle:     CGFloat? = nil
     @State private var startLocation: CGPoint? = nil
-    @State private var totalRotation: CGFloat = 0
-    @State private var pressedRegion: WheelRegion? = nil
+    @State private var totalRotation: CGFloat  = 0
+    @State private var pressedRegion: Region?  = nil
 
-    enum WheelRegion { case center, top, right, bottom, left }
+    enum Region { case center, top, right, bottom, left }
+
+    // Label/icon colour – matches the gray in the screenshots
+    private let labelColor = Color(white: 0.60)
 
     var body: some View {
         GeometryReader { geo in
             let side   = min(geo.size.width, geo.size.height)
             let cx     = geo.size.width  / 2
             let cy     = geo.size.height / 2
-            let center = CGPoint(x: cx, y: cy)
+            let cpt    = CGPoint(x: cx, y: cy)
             let outerR = side / 2
-            let innerR = side * 0.318   // centre button radius
+            let innerR = side * 0.330   // centre button radius
 
             ZStack {
-                outerWheel(side: side, outerR: outerR)
-                wheelLabels(side: side, innerR: innerR)
+                outerRing(side: side)
+                labels(side: side, innerR: innerR)
                 centerButton(side: side, innerR: innerR)
             }
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                    .onChanged { v in
-                        handleChanged(v, center: center, innerR: innerR)
-                    }
-                    .onEnded { v in
-                        handleEnded(v, center: center, outerR: outerR, innerR: innerR)
-                    }
+                    .onChanged { v in changed(v, center: cpt, innerR: innerR) }
+                    .onEnded   { v in ended(v,   center: cpt, outerR: outerR, innerR: innerR) }
             )
         }
     }
 
     // MARK: - Sub-views
 
-    private func outerWheel(side: CGFloat, outerR: CGFloat) -> some View {
-        // The iPod Classic wheel is a smooth, slightly shiny white disc
+    private func outerRing(side: CGFloat) -> some View {
         Circle()
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color(white: 0.960),
-                        Color(white: 0.880),
-                        Color(white: 0.830)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint:   .bottomTrailing
-                )
-            )
-            // Outer ridge / bevel
-            .overlay(
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color(white: 0.96), Color(white: 0.55)],
-                            startPoint: .topLeading,
-                            endPoint:   .bottomTrailing
-                        ),
-                        lineWidth: 2
-                    )
-            )
-            // Drop shadow
-            .shadow(color: .black.opacity(0.32), radius: 12, x: 0, y: 6)
-            .shadow(color: .black.opacity(0.12), radius:  4, x: 0, y: 2)
-            // Specular highlight along top-left arc
-            .overlay(
-                Circle()
-                    .trim(from: 0.60, to: 0.90)          // top-left arc
-                    .stroke(Color.white.opacity(0.55), lineWidth: 3)
-                    .rotationEffect(.degrees(-90))
-            )
+            .fill(Color.white)
+            // Subtle drop shadow
+            .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 5)
+            .shadow(color: .black.opacity(0.08), radius:  3, x: 0, y: 2)
     }
 
-    private func wheelLabels(side: CGFloat, innerR: CGFloat) -> some View {
-        let iconSize:   CGFloat = side * 0.095
-        let labelInset: CGFloat = side * 0.072
-        let menuSize:   CGFloat = side * 0.066
-        let tint = Color(white: 0.28)
+    private func labels(side: CGFloat, innerR: CGFloat) -> some View {
+        let ringMid: CGFloat = (side / 2 + innerR) / 2
+        let iconPt:  CGFloat = side * 0.088
+        let menuPt:  CGFloat = side * 0.065
+        let inset:   CGFloat = side / 2 - ringMid
 
         return ZStack {
             // MENU – top
             VStack {
                 Text("MENU")
-                    .font(.system(size: menuSize, weight: .bold, design: .default))
-                    .foregroundColor(pressedRegion == .top ? Color(white: 0.05) : tint)
-                    .kerning(0.5)
+                    .font(.system(size: menuPt, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundColor(pressedRegion == .top ? Color(white: 0.35) : labelColor)
                 Spacer()
             }
             .frame(width: side, height: side)
-            .padding(.top, labelInset)
+            .padding(.top, inset - menuPt * 0.6)
 
             // |<< – left
             HStack {
-                Image(systemName: "backward.end.fill")
-                    .font(.system(size: iconSize, weight: .semibold))
-                    .foregroundColor(pressedRegion == .left ? Color(white: 0.05) : tint)
+                skipIcon(name: "backward.end.fill", size: iconPt,
+                         pressed: pressedRegion == .left)
                 Spacer()
             }
             .frame(width: side, height: side)
-            .padding(.leading, labelInset)
+            .padding(.leading, inset - iconPt * 0.6)
 
             // >>| – right
             HStack {
                 Spacer()
-                Image(systemName: "forward.end.fill")
-                    .font(.system(size: iconSize, weight: .semibold))
-                    .foregroundColor(pressedRegion == .right ? Color(white: 0.05) : tint)
+                skipIcon(name: "forward.end.fill", size: iconPt,
+                         pressed: pressedRegion == .right)
             }
             .frame(width: side, height: side)
-            .padding(.trailing, labelInset)
+            .padding(.trailing, inset - iconPt * 0.6)
 
-            // ▶︎/⏸ – bottom
+            // ▶⏸ – bottom
             VStack {
                 Spacer()
-                Image(systemName: "playpause.fill")
-                    .font(.system(size: iconSize, weight: .semibold))
-                    .foregroundColor(pressedRegion == .bottom ? Color(white: 0.05) : tint)
+                skipIcon(name: "playpause.fill", size: iconPt,
+                         pressed: pressedRegion == .bottom)
             }
             .frame(width: side, height: side)
-            .padding(.bottom, labelInset)
+            .padding(.bottom, inset - iconPt * 0.6)
         }
     }
 
+    private func skipIcon(name: String, size: CGFloat, pressed: Bool) -> some View {
+        Image(systemName: name)
+            .font(.system(size: size, weight: .semibold))
+            .foregroundColor(pressed ? Color(white: 0.30) : labelColor)
+    }
+
     private func centerButton(side: CGFloat, innerR: CGFloat) -> some View {
-        let diam = innerR * 2
+        let diam    = innerR * 2
         let pressed = pressedRegion == .center
         return Circle()
             .fill(
                 RadialGradient(
                     colors: [
-                        pressed ? Color(white: 0.80) : Color(white: 0.955),
-                        pressed ? Color(white: 0.70) : Color(white: 0.840)
+                        Color(white: pressed ? 0.76 : 0.865),
+                        Color(white: pressed ? 0.66 : 0.780),
                     ],
-                    center:      UnitPoint(x: 0.36, y: 0.30),
+                    center:      UnitPoint(x: 0.40, y: 0.36),
                     startRadius: 0,
-                    endRadius:   innerR
+                    endRadius:   innerR * 0.9
                 )
             )
             .frame(width: diam, height: diam)
-            // Inner bevel ring
-            .overlay(
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color(white: 0.92), Color(white: 0.52)],
-                            startPoint: .topLeading,
-                            endPoint:   .bottomTrailing
-                        ),
-                        lineWidth: 1.2
-                    )
-                    .frame(width: diam, height: diam)
-            )
-            .shadow(color: .black.opacity(0.20), radius: 5, x: 0, y: 2)
-            .shadow(color: .white.opacity(0.80), radius: 2, x: -1, y: -1)
+            // Inset shadow between ring and button
+            .shadow(color: .black.opacity(0.22), radius: 5, x: 0, y: 2)
     }
 
     // MARK: - Gesture handling
 
-    private func handleChanged(_ v: DragGesture.Value, center: CGPoint, innerR: CGFloat) {
-        let dx = v.location.x - center.x
-        let dy = v.location.y - center.y
+    private func changed(_ v: DragGesture.Value, center: CGPoint, innerR: CGFloat) {
+        let dx   = v.location.x - center.x
+        let dy   = v.location.y - center.y
         let dist = hypot(dx, dy)
 
-        if startLocation == nil {
-            startLocation  = v.location
-            totalRotation  = 0
-        }
+        if startLocation == nil { startLocation = v.location; totalRotation = 0 }
 
         if dist > innerR + 6 {
-            // Ring – compute rotation delta for scroll
+            // Ring – scroll
             let angle = atan2(dy, dx)
             if let last = lastAngle {
                 var delta = angle - last
@@ -194,27 +150,26 @@ struct ClickWheelView: View {
         }
     }
 
-    private func handleEnded(_ v: DragGesture.Value, center: CGPoint, outerR: CGFloat, innerR: CGFloat) {
+    private func ended(_ v: DragGesture.Value, center: CGPoint, outerR: CGFloat, innerR: CGFloat) {
         let dx   = v.location.x - center.x
         let dy   = v.location.y - center.y
         let dist = hypot(dx, dy)
 
-        let travelDist = startLocation.map { s in
+        let travel = startLocation.map { s in
             hypot(v.location.x - s.x, v.location.y - s.y)
         } ?? 0
 
-        // Fire a button only if gesture was a short tap (no real scroll movement)
-        if travelDist < 14 && abs(totalRotation) < 0.10 {
+        if travel < 14 && abs(totalRotation) < 0.10 {
             if dist <= innerR {
                 onCenter()
             } else if dist <= outerR {
                 let deg  = atan2(dy, dx) * 180 / .pi
                 let norm = deg < 0 ? deg + 360 : deg
                 switch norm {
-                case 315...360, 0..<45:  onMenu()
-                case 45..<135:           onNext()
-                case 135..<225:          onPlayPause()
-                default:                 onPrevious()
+                case 315...360, 0..<45: onMenu()
+                case 45..<135:          onNext()
+                case 135..<225:         onPlayPause()
+                default:                onPrevious()
                 }
             }
         }

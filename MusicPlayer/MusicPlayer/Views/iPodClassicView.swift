@@ -1,38 +1,15 @@
 import SwiftUI
 import MediaPlayer
 
-// MARK: - iPod Classic colour palette
-
-private enum iPodColor {
-    // Screen background – warm white
-    static let screenBG      = Color(red: 0.969, green: 0.969, blue: 0.969)
-    // Title-bar chrome (top lighter, bottom darker)
-    static let titleTop      = Color(red: 0.820, green: 0.820, blue: 0.830)
-    static let titleBot      = Color(red: 0.655, green: 0.655, blue: 0.665)
-    // Row separator
-    static let separator     = Color(red: 0.780, green: 0.780, blue: 0.790)
-    // Normal row text
-    static let rowText       = Color.black
-    static let rowDetail     = Color(red: 0.40, green: 0.40, blue: 0.42)
-    static let rowChevron    = Color(red: 0.62, green: 0.62, blue: 0.64)
-    // Selection gradient (3-stop classic Apple blue)
-    static let selTop        = Color(red: 0.489, green: 0.686, blue: 0.980)
-    static let selMid        = Color(red: 0.169, green: 0.431, blue: 0.898)
-    static let selBot        = Color(red: 0.047, green: 0.220, blue: 0.690)
-    // Now-playing scrubber
-    static let scrubFill     = Color(red: 0.169, green: 0.431, blue: 0.898)
-    static let scrubTrack    = Color(red: 0.60, green: 0.60, blue: 0.62)
-}
-
-// MARK: - Navigation model
+// MARK: - Navigation pages
 
 enum iPodPage: Hashable {
-    case mainMenu, musicMenu, songs, albums, artists, nowPlaying, settings
+    case mainMenu, musicMenu, artists, albums, songs, nowPlaying
     case albumDetail(String)
     case artistDetail(String)
 }
 
-// MARK: - Main view
+// MARK: - Root view
 
 struct iPodClassicView: View {
     @EnvironmentObject var library: MusicLibraryManager
@@ -42,7 +19,7 @@ struct iPodClassicView: View {
     @State private var pageStack: [iPodPage] = [.mainMenu]
     @State private var selectedIndices: [iPodPage: Int] = [:]
     @State private var scrollAccum: CGFloat = 0
-    @State private var showLastFMSettings = false
+    @State private var showSettings = false
 
     var currentPage: iPodPage { pageStack.last ?? .mainMenu }
     var selectedIndex: Int    { selectedIndices[currentPage] ?? 0 }
@@ -50,108 +27,58 @@ struct iPodClassicView: View {
 
     // MARK: Menu data
 
-    struct MenuItem {
-        let title: String
-        let detail: String?
-        let hasChevron: Bool
-    }
+    struct MenuItem { let title: String; let icon: String?; let chevron: Bool }
 
     var menuItems: [MenuItem] {
         switch currentPage {
         case .mainMenu:
             return [
-                .init(title: "Music",       detail: nil,                              hasChevron: true),
-                .init(title: "Now Playing", detail: nil,                              hasChevron: false),
-                .init(title: "Last.fm",     detail: lastFM.isAuthenticated ? lastFM.username : "Not connected", hasChevron: true)
+                MenuItem(title: "Now Playing", icon: "play.circle.fill",  chevron: false),
+                MenuItem(title: "Music",       icon: "music.note.list",   chevron: true),
+                MenuItem(title: "Settings",    icon: "gear",              chevron: true),
             ]
         case .musicMenu:
             return [
-                .init(title: "Songs",   detail: "\(library.songs.count)",   hasChevron: true),
-                .init(title: "Albums",  detail: "\(library.albums.count)",  hasChevron: true),
-                .init(title: "Artists", detail: "\(library.artists.count)", hasChevron: true)
+                MenuItem(title: "Artists", icon: nil, chevron: true),
+                MenuItem(title: "Albums",  icon: nil, chevron: true),
+                MenuItem(title: "Songs",   icon: nil, chevron: true),
             ]
-        case .songs:
-            return library.songs.map   { .init(title: $0.title,  detail: $0.artist, hasChevron: false) }
-        case .albums:
-            return library.albums.map  { .init(title: $0.title,  detail: $0.artist, hasChevron: true)  }
-        case .albumDetail(let id):
-            let tracks = library.albums.first { $0.id == id }?.tracks ?? []
-            return tracks.map { .init(title: $0.title, detail: formatDuration($0.duration), hasChevron: false) }
         case .artists:
-            return library.artists.map { .init(title: $0.name,   detail: "\($0.tracks.count) songs",   hasChevron: true) }
+            return library.artists.map { MenuItem(title: $0.name,  icon: nil, chevron: true)  }
+        case .albums:
+            return library.albums.map  { MenuItem(title: $0.title, icon: nil, chevron: true)  }
+        case .songs:
+            return library.songs.map   { MenuItem(title: $0.title, icon: nil, chevron: false) }
+        case .albumDetail(let id):
+            return (library.albums.first  { $0.id == id }?.tracks ?? [])
+                .map { MenuItem(title: $0.title, icon: nil, chevron: false) }
         case .artistDetail(let id):
-            let tracks = library.artists.first { $0.id == id }?.tracks ?? []
-            return tracks.map { .init(title: $0.title, detail: $0.album, hasChevron: false) }
-        case .nowPlaying, .settings:
+            return (library.artists.first { $0.id == id }?.tracks ?? [])
+                .map { MenuItem(title: $0.title, icon: nil, chevron: false) }
+        case .nowPlaying:
             return []
         }
     }
 
-    var pageTitle: String {
-        switch currentPage {
-        case .mainMenu:              return "iPod"
-        case .musicMenu:             return "Music"
-        case .songs:                 return "Songs"
-        case .albums:                return "Albums"
-        case .albumDetail(let id):   return library.albums.first  { $0.id == id }?.title ?? "Album"
-        case .artists:               return "Artists"
-        case .artistDetail(let id):  return library.artists.first { $0.id == id }?.name  ?? "Artist"
-        case .nowPlaying:            return "Now Playing"
-        case .settings:              return "Settings"
-        }
-    }
-
-    // MARK: - Layout
+    // MARK: - Body
 
     var body: some View {
         GeometryReader { geo in
-            ZStack {
-                iPodBodyBackground()
+            VStack(spacing: 0) {
+                // ── iPhone screen area ───────────────────────────────
+                screenContent(geo: geo)
+                    .frame(width: geo.size.width, height: screenHeight(geo))
 
-                VStack(spacing: 0) {
-                    // ── Screen ──────────────────────────────────────────
-                    Group {
-                        if currentPage == .nowPlaying {
-                            NowPlayingScreen()
-                        } else {
-                            MenuScreen(
-                                title: pageTitle,
-                                items: menuItems,
-                                selectedIndex: selectedIndex,
-                                isLoading: library.isLoading
-                            )
-                        }
-                    }
-                    .frame(height: screenHeight(geo))
-                    .background(iPodColor.screenBG)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7)
-                            .stroke(Color(white: 0.38), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.45), radius: 5, x: 0, y: 3)
-                    .padding(.horizontal, horizontalPad(geo))
-                    .padding(.top, topPad(geo))
+                // ── Physical bezel / gap ─────────────────────────────
+                Color.black.frame(height: 20)
 
-                    Spacer()
-
-                    // ── Click wheel ──────────────────────────────────────
-                    let wd = wheelDiam(geo)
-                    ClickWheelView(
-                        onMenu:      navigateBack,
-                        onPrevious:  handlePrevious,
-                        onNext:      handleNext,
-                        onPlayPause: { player.togglePlayPause(); impact(.medium) },
-                        onCenter:    handleCenter,
-                        onScroll:    handleScroll
-                    )
-                    .frame(width: wd, height: wd)
-                    .padding(.bottom, bottomPad(geo))
-                }
+                // ── Click wheel area ─────────────────────────────────
+                wheelArea(geo: geo)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .ignoresSafeArea()
-        .sheet(isPresented: $showLastFMSettings) {
+        .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(lastFM)
         }
         .onChange(of: currentPage) { _, _ in
@@ -159,13 +86,125 @@ struct iPodClassicView: View {
         }
     }
 
-    // MARK: - Sizing helpers
+    func screenHeight(_ g: GeometryProxy) -> CGFloat { g.size.height * 0.525 }
 
-    func screenHeight(_ g: GeometryProxy) -> CGFloat  { g.size.height * 0.40 }
-    func horizontalPad(_ g: GeometryProxy) -> CGFloat { 20 }
-    func topPad(_ g: GeometryProxy) -> CGFloat        { g.safeAreaInsets.top + 14 }
-    func wheelDiam(_ g: GeometryProxy) -> CGFloat     { min(g.size.width * 0.80, 310) }
-    func bottomPad(_ g: GeometryProxy) -> CGFloat     { g.safeAreaInsets.bottom + 18 }
+    // MARK: - Screen content
+
+    @ViewBuilder
+    func screenContent(geo: GeometryProxy) -> some View {
+        if currentPage == .nowPlaying {
+            NowPlayingScreen().environmentObject(player)
+        } else {
+            menuListScreen(geo: geo)
+        }
+    }
+
+    func menuListScreen(geo: GeometryProxy) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: 0) {
+                    // Push list below status bar
+                    Color.clear.frame(height: geo.safeAreaInsets.top)
+
+                    if library.isLoading {
+                        ProgressView()
+                            .padding(.top, 40)
+                            .tint(Color(red: 0.25, green: 0.55, blue: 0.88))
+                    } else {
+                        ForEach(Array(menuItems.enumerated()), id: \.offset) { idx, item in
+                            menuRow(item: item, index: idx).id(idx)
+                        }
+                    }
+                }
+            }
+            .background(Color(white: 0.964))
+            .onChange(of: selectedIndex) { _, val in
+                withAnimation(.none) { proxy.scrollTo(val, anchor: .center) }
+            }
+        }
+    }
+
+    // MARK: - Menu row
+
+    func menuRow(item: MenuItem, index: Int) -> some View {
+        let sel = index == selectedIndex
+        return ZStack(alignment: .bottom) {
+            // Row background
+            if sel {
+                selectionGradient
+            } else {
+                Color(white: 0.964)
+            }
+
+            // Content
+            HStack(spacing: 14) {
+                if let icon = item.icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(sel ? .white : .black)
+                        .frame(width: 28)
+                }
+                Text(item.title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(sel ? .white : .black)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer()
+                if item.chevron {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(sel ? .white.opacity(0.75) : Color(white: 0.62))
+                }
+            }
+            .padding(.horizontal, 18)
+            .frame(height: 52)
+
+            // Hairline separator on unselected rows
+            if !sel {
+                Color(white: 0.80).frame(height: 0.5)
+            }
+        }
+        .frame(height: 52)
+    }
+
+    var selectionGradient: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.330, green: 0.648, blue: 0.930),
+                Color(red: 0.165, green: 0.455, blue: 0.820),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    // MARK: - Click wheel area
+
+    func wheelArea(geo: GeometryProxy) -> some View {
+        ZStack {
+            // Silver aluminium background with radial vignette
+            ZStack {
+                Color(white: 0.80)
+                RadialGradient(
+                    colors: [Color(white: 0.965), Color(white: 0.72)],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: min(geo.size.width, geo.size.height - screenHeight(geo)) * 0.62
+                )
+            }
+
+            let wd = min(geo.size.width * 0.845, 350.0)
+            ClickWheelView(
+                onMenu:      navigateBack,
+                onPrevious:  handlePrevious,
+                onNext:      handleNext,
+                onPlayPause: { player.togglePlayPause(); impact(.medium) },
+                onCenter:    handleCenter,
+                onScroll:    handleScroll
+            )
+            .frame(width: wd, height: wd)
+        }
+    }
 
     // MARK: - Navigation
 
@@ -177,58 +216,53 @@ struct iPodClassicView: View {
 
     func handleCenter() {
         impact(.medium)
-        let idx = selectedIndex
+        let i = selectedIndex
         switch currentPage {
         case .mainMenu:
-            switch idx {
-            case 0: pageStack.append(.musicMenu)
-            case 1: pageStack.append(.nowPlaying)
-            case 2: showLastFMSettings = true
-            default: break
+            switch i {
+            case 0: pageStack.append(.nowPlaying)
+            case 1: pageStack.append(.musicMenu)
+            default: showSettings = true
             }
         case .musicMenu:
-            switch idx {
-            case 0: pageStack.append(.songs)
+            switch i {
+            case 0: pageStack.append(.artists)
             case 1: pageStack.append(.albums)
-            case 2: pageStack.append(.artists)
-            default: break
+            default: pageStack.append(.songs)
             }
-        case .songs:
-            guard idx < library.songs.count else { return }
-            player.play(track: library.songs[idx], queue: library.songs, index: idx)
-            pageStack.append(.nowPlaying)
+        case .artists:
+            guard i < library.artists.count else { return }
+            pageStack.append(.artistDetail(library.artists[i].id))
         case .albums:
-            guard idx < library.albums.count else { return }
-            pageStack.append(.albumDetail(library.albums[idx].id))
+            guard i < library.albums.count else { return }
+            pageStack.append(.albumDetail(library.albums[i].id))
+        case .songs:
+            guard i < library.songs.count else { return }
+            player.play(track: library.songs[i], queue: library.songs, index: i)
+            pageStack.append(.nowPlaying)
         case .albumDetail(let id):
             let tracks = library.albums.first { $0.id == id }?.tracks ?? []
-            guard idx < tracks.count else { return }
-            player.play(track: tracks[idx], queue: tracks, index: idx)
+            guard i < tracks.count else { return }
+            player.play(track: tracks[i], queue: tracks, index: i)
             pageStack.append(.nowPlaying)
-        case .artists:
-            guard idx < library.artists.count else { return }
-            pageStack.append(.artistDetail(library.artists[idx].id))
         case .artistDetail(let id):
             let tracks = library.artists.first { $0.id == id }?.tracks ?? []
-            guard idx < tracks.count else { return }
-            player.play(track: tracks[idx], queue: tracks, index: idx)
+            guard i < tracks.count else { return }
+            player.play(track: tracks[i], queue: tracks, index: i)
             pageStack.append(.nowPlaying)
         case .nowPlaying:
             player.togglePlayPause()
-        case .settings:
-            break
         }
     }
 
     func handleScroll(_ delta: CGFloat) {
-        let count = menuItems.count
-        guard count > 0, currentPage != .nowPlaying else { return }
+        guard !menuItems.isEmpty, currentPage != .nowPlaying else { return }
         scrollAccum += delta
         let threshold: CGFloat = 0.18
         while abs(scrollAccum) >= threshold {
             let step = scrollAccum > 0 ? 1 : -1
             scrollAccum -= CGFloat(step) * threshold
-            let next = max(0, min(count - 1, selectedIndex + step))
+            let next = max(0, min(menuItems.count - 1, selectedIndex + step))
             if next != selectedIndex {
                 setSelected(next)
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -251,341 +285,90 @@ struct iPodClassicView: View {
     func impact(_ s: UIImpactFeedbackGenerator.FeedbackStyle) {
         UIImpactFeedbackGenerator(style: s).impactOccurred()
     }
-
-    func formatDuration(_ s: TimeInterval) -> String {
-        guard s.isFinite else { return "0:00" }
-        return String(format: "%d:%02d", Int(s) / 60, Int(s) % 60)
-    }
 }
 
-// MARK: - iPod body background
+// MARK: - Now Playing (full-bleed)
 
-private struct iPodBodyBackground: View {
-    var body: some View {
-        LinearGradient(
-            colors: [Color(white: 0.975), Color(white: 0.900)],
-            startPoint: .top, endPoint: .bottom
-        )
-    }
-}
-
-// MARK: - Classic title bar
-
-private struct ClassicTitleBar: View {
-    let title: String
-
-    var body: some View {
-        ZStack {
-            // Chrome gradient
-            LinearGradient(
-                colors: [iPodColor.titleTop, iPodColor.titleBot],
-                startPoint: .top, endPoint: .bottom
-            )
-
-            HStack(spacing: 0) {
-                // Left spacer balances the battery icon so title is truly centred
-                Spacer().frame(width: 28)
-
-                Spacer()
-
-                Text(title)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.black)
-                    .lineLimit(1)
-                    .shadow(color: .white.opacity(0.6), radius: 0, x: 0, y: 1)
-
-                Spacer()
-
-                // Battery
-                BatteryIcon()
-                    .frame(width: 28)
-            }
-            .padding(.horizontal, 6)
-        }
-        .frame(height: 22)
-        // 1 pt separator line at bottom
-        .overlay(Rectangle().fill(iPodColor.separator).frame(height: 0.5), alignment: .bottom)
-    }
-}
-
-// Pixel-faithful battery indicator
-private struct BatteryIcon: View {
-    var body: some View {
-        HStack(spacing: 1) {
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 1.5)
-                    .stroke(Color(white: 0.28), lineWidth: 0.8)
-                    .frame(width: 18, height: 9)
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color(white: 0.28))
-                    .frame(width: 13, height: 6)
-                    .offset(x: 2)
-            }
-            // Nub
-            Rectangle()
-                .fill(Color(white: 0.28))
-                .frame(width: 2, height: 4)
-                .cornerRadius(0.5)
-        }
-    }
-}
-
-// MARK: - Menu screen
-
-private struct MenuScreen: View {
-    @EnvironmentObject var library: MusicLibraryManager
-
-    let title: String
-    let items: [iPodClassicView.MenuItem]
-    let selectedIndex: Int
-    let isLoading: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ClassicTitleBar(title: title)
-
-            if isLoading {
-                Spacer()
-                ProgressView().scaleEffect(0.65).tint(iPodColor.selMid)
-                Spacer()
-            } else if items.isEmpty {
-                Spacer()
-                Text("No items")
-                    .font(.system(size: 11))
-                    .foregroundColor(iPodColor.rowDetail)
-                Spacer()
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
-                                ClassicMenuRow(
-                                    title: item.title,
-                                    detail: item.detail,
-                                    hasChevron: item.hasChevron,
-                                    isSelected: idx == selectedIndex
-                                )
-                                .id(idx)
-                            }
-                        }
-                    }
-                    .onChange(of: selectedIndex) { _, val in
-                        withAnimation(.none) { proxy.scrollTo(val, anchor: .center) }
-                    }
-                }
-            }
-        }
-        .background(iPodColor.screenBG)
-    }
-}
-
-// MARK: - Classic menu row
-
-private struct ClassicMenuRow: View {
-    let title: String
-    let detail: String?
-    let hasChevron: Bool
-    let isSelected: Bool
-
-    private let rowH: CGFloat = 22
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            // Row background
-            if isSelected {
-                LinearGradient(
-                    stops: [
-                        .init(color: iPodColor.selTop, location: 0.00),
-                        .init(color: iPodColor.selMid, location: 0.50),
-                        .init(color: iPodColor.selBot, location: 1.00)
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-            } else {
-                Color.white
-            }
-
-            // Content
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 11.5, weight: .regular))
-                    .foregroundColor(isSelected ? .white : iPodColor.rowText)
-                    .lineLimit(1)
-
-                Spacer()
-
-                if let d = detail {
-                    Text(d)
-                        .font(.system(size: 10.5))
-                        .foregroundColor(isSelected ? .white.opacity(0.85) : iPodColor.rowDetail)
-                        .lineLimit(1)
-                }
-
-                if hasChevron {
-                    Text("›")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(isSelected ? .white.opacity(0.85) : iPodColor.rowChevron)
-                        .offset(y: -0.5)
-                }
-            }
-            .padding(.horizontal, 9)
-            .frame(height: rowH)
-
-            // Separator — only shown on unselected rows
-            if !isSelected {
-                iPodColor.separator
-                    .frame(height: 0.5)
-            }
-        }
-        .frame(height: rowH)
-    }
-}
-
-// MARK: - Now Playing screen
-
-private struct NowPlayingScreen: View {
+struct NowPlayingScreen: View {
     @EnvironmentObject var player: AudioPlayerService
 
     var body: some View {
-        VStack(spacing: 0) {
-            ClassicTitleBar(title: "Now Playing")
+        GeometryReader { geo in
+            ZStack(alignment: .bottomLeading) {
+                Color.black
 
-            if let track = player.currentTrack {
-                trackDisplay(track)
-            } else {
-                Spacer()
-                Text("Nothing Playing")
-                    .font(.system(size: 11))
-                    .foregroundColor(iPodColor.rowDetail)
-                Spacer()
-            }
-        }
-        .background(iPodColor.screenBG)
-    }
-
-    @ViewBuilder
-    private func trackDisplay(_ track: Track) -> some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Album art – square, flush left, full height of content area
-            GeometryReader { g in
-                Group {
-                    if let img = track.artworkImage(size: CGSize(width: 200, height: 200)) {
+                if let track = player.currentTrack {
+                    // Full-bleed album art
+                    if let img = track.artworkImage(
+                        size: CGSize(width: geo.size.width * 3, height: geo.size.height * 3)
+                    ) {
                         Image(uiImage: img)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                    } else {
-                        ZStack {
-                            Color(red: 0.78, green: 0.78, blue: 0.80)
-                            Image(systemName: "music.note")
-                                .font(.system(size: g.size.width * 0.35))
-                                .foregroundColor(Color(white: 0.5))
-                        }
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
                     }
+
+                    // Bottom gradient so text is readable
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear,            location: 0.35),
+                            .init(color: .black.opacity(0.72), location: 1.0),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+
+                    // Track info + progress
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(track.title)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+
+                        Text(track.artist)
+                            .font(.system(size: 15))
+                            .foregroundColor(.white.opacity(0.88))
+                            .lineLimit(1)
+                            .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+
+                        Spacer().frame(height: 8)
+
+                        // Progress bar
+                        GeometryReader { g in
+                            let pct = player.duration > 0
+                                ? CGFloat(player.currentTime / player.duration) : 0
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.28))
+                                    .frame(height: 4)
+                                Capsule()
+                                    .fill(Color.white)
+                                    .frame(width: max(0, g.size.width * pct), height: 4)
+                            }
+                        }
+                        .frame(height: 4)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 16)
+
+                } else {
+                    // Nothing playing
+                    VStack {
+                        Spacer()
+                        Image(systemName: "music.note")
+                            .font(.system(size: 40))
+                            .foregroundColor(.white.opacity(0.35))
+                        Text("Nothing Playing")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.45))
+                            .padding(.top, 8)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(width: g.size.width, height: g.size.height)
-                .clipped()
             }
-            .aspectRatio(1, contentMode: .fit)
-
-            // Track info column
-            VStack(alignment: .leading, spacing: 0) {
-                // Song title
-                Text(track.title)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.black)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 7)
-
-                // Thin rule
-                iPodColor.separator.frame(height: 0.5).padding(.vertical, 4)
-
-                // Artist
-                Text(track.artist)
-                    .font(.system(size: 10))
-                    .foregroundColor(Color(white: 0.25))
-                    .lineLimit(1)
-
-                // Album
-                Text(track.album)
-                    .font(.system(size: 10))
-                    .foregroundColor(iPodColor.rowDetail)
-                    .lineLimit(1)
-                    .padding(.top, 2)
-
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxHeight: .infinity)
-
-        // ── Scrubber area (bottom) ──────────────────────────────────
-        VStack(spacing: 2) {
-            // Track / progress bar with diamond thumb
-            GeometryReader { g in
-                let pct = player.duration > 0 ? CGFloat(player.currentTime / player.duration) : 0
-                let filled = g.size.width * pct
-
-                ZStack(alignment: .leading) {
-                    // Track groove
-                    Capsule()
-                        .fill(iPodColor.scrubTrack)
-                        .frame(height: 3)
-
-                    // Filled portion
-                    Capsule()
-                        .fill(iPodColor.scrubFill)
-                        .frame(width: max(0, filled), height: 3)
-
-                    // Diamond thumb
-                    DiamondShape()
-                        .fill(Color.white)
-                        .overlay(DiamondShape().stroke(iPodColor.scrubFill, lineWidth: 1))
-                        .frame(width: 8, height: 8)
-                        .offset(x: max(0, filled - 4))
-                }
-                .frame(height: g.size.height)
-            }
-            .frame(height: 10)
-            .padding(.horizontal, 8)
-
-            // Time labels
-            HStack {
-                Text(formatTime(player.currentTime))
-                Spacer()
-                // Play/pause state icon
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 7))
-                    .foregroundColor(iPodColor.rowDetail)
-                Spacer()
-                Text("-" + formatTime(max(0, player.duration - player.currentTime)))
-            }
-            .font(.system(size: 9, design: .monospaced))
-            .foregroundColor(iPodColor.rowDetail)
-            .padding(.horizontal, 10)
-        }
-        .padding(.top, 4)
-        .padding(.bottom, 6)
-        .background(iPodColor.screenBG)
-        .overlay(iPodColor.separator.frame(height: 0.5), alignment: .top)
-    }
-
-    private func formatTime(_ s: Double) -> String {
-        guard s.isFinite else { return "0:00" }
-        return String(format: "%d:%02d", Int(s) / 60, Int(s) % 60)
-    }
-}
-
-// Diamond scrubber thumb
-private struct DiamondShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to:    CGPoint(x: rect.midX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        p.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
-        p.closeSubpath()
-        return p
     }
 }
