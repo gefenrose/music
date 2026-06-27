@@ -25,7 +25,7 @@ struct ClickWheelView: View {
             let cy     = geo.size.height / 2
             let cpt    = CGPoint(x: cx, y: cy)
             let outerR = side / 2
-            let innerR = side * 0.330   // centre button radius
+            let innerR = side * 0.262   // centre button radius — ~53% of diameter
 
             ZStack {
                 outerRing(side: side)
@@ -51,10 +51,11 @@ struct ClickWheelView: View {
     }
 
     private func labels(side: CGFloat, innerR: CGFloat) -> some View {
-        let ringMid: CGFloat = (side / 2 + innerR) / 2
-        let iconPt:  CGFloat = side * 0.088
-        let menuPt:  CGFloat = side * 0.065
-        let inset:   CGFloat = side / 2 - ringMid
+        let outerR:  CGFloat = side / 2
+        let ringMid: CGFloat = (outerR + innerR) / 2   // midpoint of ring
+        let iconPt:  CGFloat = side * 0.082
+        let menuPt:  CGFloat = side * 0.060
+        let inset:   CGFloat = outerR - ringMid        // distance from edge to label centre
 
         return ZStack {
             // MENU – top

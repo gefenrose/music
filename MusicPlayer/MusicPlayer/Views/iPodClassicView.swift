@@ -68,12 +68,24 @@ struct iPodClassicView: View {
                 // ── iPhone screen area ───────────────────────────────
                 screenContent(geo: geo)
                     .frame(width: geo.size.width, height: screenHeight(geo))
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0, bottomLeadingRadius: 20,
+                            bottomTrailingRadius: 20, topTrailingRadius: 0
+                        )
+                    )
 
                 // ── Physical bezel / gap ─────────────────────────────
-                Color.black.frame(height: 20)
+                Color.black.frame(height: 16)
 
                 // ── Click wheel area ─────────────────────────────────
                 wheelArea(geo: geo)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 20, bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0, topTrailingRadius: 20
+                        )
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -193,7 +205,7 @@ struct iPodClassicView: View {
                 )
             }
 
-            let wd = min(geo.size.width * 0.845, 350.0)
+            let wd = min(geo.size.width * 0.78, 308.0)
             ClickWheelView(
                 onMenu:      navigateBack,
                 onPrevious:  handlePrevious,
