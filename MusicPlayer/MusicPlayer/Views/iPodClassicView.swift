@@ -1,6 +1,31 @@
 import SwiftUI
 import MediaPlayer
 
+// MARK: - Album thumbnail (loads image once, off the render hot-path)
+
+private struct AlbumThumbView: View {
+    let artwork: MPMediaItemArtwork
+    let albumId: String
+    @State private var img: UIImage? = nil
+
+    var body: some View {
+        Group {
+            if let img {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Color(white: 0.85)
+            }
+        }
+        .frame(width: 40, height: 40)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .task(id: albumId) {
+            img = artwork.image(at: CGSize(width: 80, height: 80))
+        }
+    }
+}
+
 // MARK: - Navigation pages
 
 enum iPodPage: Hashable {
@@ -156,15 +181,14 @@ struct iPodClassicView: View {
     func albumDetailHeader() -> some View {
         if case .albumDetail(let id) = currentPage,
            let album = library.albums.first(where: { $0.id == id }),
-           let img   = album.artwork?.image(at: CGSize(width: 320, height: 320)) {
-            VStack(spacing: 6) {
+           let img   = album.artwork?.image(at: CGSize(width: 200, height: 200)) {
+            VStack(spacing: 4) {
                 Image(uiImage: img)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
+                    .frame(height: 100)
                 Text(album.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .padding(.bottom, 4)
@@ -174,20 +198,16 @@ struct iPodClassicView: View {
 
     // MARK: - Artwork lookup
 
-    func albumArtwork(for index: Int) -> MPMediaItemArtwork? {
-        switch currentPage {
-        case .albums:
-            return index < library.albums.count ? library.albums[index].artwork : nil
-        default:
-            return nil
-        }
+    func albumForRow(_ index: Int) -> AlbumGroup? {
+        guard case .albums = currentPage, index < library.albums.count else { return nil }
+        return library.albums[index]
     }
 
     // MARK: - Menu row
 
     func menuRow(item: MenuItem, index: Int) -> some View {
         let sel      = index == selectedIndex
-        let artwork  = albumArtwork(for: index)
+        let album    = albumForRow(index)
         return ZStack(alignment: .bottom) {
             // Row background
             if sel {
@@ -204,13 +224,8 @@ struct iPodClassicView: View {
                         .foregroundColor(sel ? .white : .black)
                         .frame(width: 28)
                 }
-                if let art = artwork,
-                   let img = art.image(at: CGSize(width: 80, height: 80)) {
-                    Image(uiImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                if let album, let art = album.artwork {
+                    AlbumThumbView(artwork: art, albumId: album.id)
                 }
                 Text(item.title)
                     .font(.system(size: 20, weight: .bold))
