@@ -88,8 +88,8 @@ struct iPodClassicView: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // ── Home indicator safe area ─────────────────────────
-                Color.black.frame(height: bottomSafeArea())
+                // ── Home indicator safe area — continuation of wheel background ──
+                Color(white: 0.80).frame(height: bottomSafeArea())
             }
         }
         .background(Color.black)
