@@ -337,7 +337,7 @@ struct iPodClassicView: View {
         }
         guard !menuItems.isEmpty else { return }
         scrollAccum += delta
-        let threshold: CGFloat = 0.18
+        let threshold: CGFloat = 0.08
         while abs(scrollAccum) >= threshold {
             let step = scrollAccum > 0 ? 1 : -1
             scrollAccum -= CGFloat(step) * threshold
