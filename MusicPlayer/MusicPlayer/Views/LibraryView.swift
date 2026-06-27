@@ -1,5 +1,4 @@
 import SwiftUI
-import MediaPlayer
 
 struct LibraryView: View {
     @EnvironmentObject var library: MusicLibraryManager
@@ -64,7 +63,7 @@ struct AlbumsListView: View {
         List(library.albums) { album in
             NavigationLink(destination: AlbumDetailView(album: album)) {
                 HStack(spacing: 12) {
-                    ArtworkView(artwork: album.artwork, size: 50)
+                    ArtworkView(image: album.artworkImage(size: CGSize(width: 50, height: 50)), size: 50)
                     VStack(alignment: .leading) {
                         Text(album.title).font(.headline)
                         Text(album.artist).font(.subheadline).foregroundColor(.secondary)
@@ -140,7 +139,7 @@ struct TrackRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ArtworkView(artwork: track.artwork, size: 44)
+            ArtworkView(image: track.artworkImage(size: CGSize(width: 44, height: 44)), size: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title)
                     .font(.body)
@@ -172,12 +171,12 @@ struct TrackRow: View {
 }
 
 struct ArtworkView: View {
-    let artwork: MPMediaItemArtwork?
+    let image: UIImage?
     let size: CGFloat
 
     var body: some View {
         Group {
-            if let image = artwork?.image(at: CGSize(width: size, height: size)) {
+            if let image {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
