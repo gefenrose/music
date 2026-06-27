@@ -1,6 +1,7 @@
 import Foundation
 import MediaPlayer
 
+@MainActor
 class MusicLibraryManager: ObservableObject {
     static let shared = MusicLibraryManager()
 
@@ -34,8 +35,7 @@ class MusicLibraryManager: ObservableObject {
 
     func loadLibrary() {
         isLoading = true
-        Task.detached(priority: .userInitiated) { [weak self] in
-            // System music library (requires authorization)
+        Task(priority: .userInitiated) {
             var libraryTracks: [Track] = []
             if MPMediaLibrary.authorizationStatus() == .authorized {
                 let items = MPMediaQuery.songs().items ?? []
@@ -45,7 +45,6 @@ class MusicLibraryManager: ObservableObject {
                 }
             }
 
-            // Imported local files (async metadata loading, no deprecated APIs)
             let localTracks = await Self.scanLocalFiles()
 
             let allTracks = (libraryTracks + localTracks).sorted { $0.title < $1.title }
@@ -65,17 +64,15 @@ class MusicLibraryManager: ObservableObject {
                 ArtistGroup(id: name, name: name, tracks: value.sorted { $0.title < $1.title })
             }.sorted { $0.name < $1.name }
 
-            await MainActor.run {
-                self?.songs = allTracks
-                self?.albums = albumGroups
-                self?.artists = artistGroups
-                self?.isLoading = false
-            }
+            self.songs = allTracks
+            self.albums = albumGroups
+            self.artists = artistGroups
+            self.isLoading = false
         }
     }
 
     func importFiles(from urls: [URL]) {
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task(priority: .userInitiated) {
             for url in urls {
                 let accessing = url.startAccessingSecurityScopedResource()
                 defer { if accessing { url.stopAccessingSecurityScopedResource() } }
@@ -89,15 +86,15 @@ class MusicLibraryManager: ObservableObject {
                     print("Import failed for \(url.lastPathComponent): \(error)")
                 }
             }
-            await MainActor.run { self?.loadLibrary() }
+            self.loadLibrary()
         }
     }
 
     func deleteLocalFile(track: Track) {
         guard let url = track.assetURL, track.id.hasPrefix("local:") else { return }
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task(priority: .userInitiated) {
             try? FileManager.default.removeItem(at: url)
-            await MainActor.run { self?.loadLibrary() }
+            self.loadLibrary()
         }
     }
 
