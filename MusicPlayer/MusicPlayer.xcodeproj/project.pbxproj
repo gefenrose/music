@@ -11,7 +11,9 @@
 		AA201000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000002 /* ContentView.swift */; };
 		AA201000000000000003 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000003 /* LibraryView.swift */; };
 		AA201000000000000004 /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000004 /* NowPlayingView.swift */; };
-		AA201000000000000005 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000005 /* SettingsView.swift */; };
+		AA201000000000000005 /* SettingsView.swift in Sources */;
+				AA201000000000000006 /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000005 /* SettingsView.swift */;
+				AA101000000000000006 /* MiniPlayerView.swift */; };
 		AA201000000000000006 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000006 /* Track.swift */; };
 		AA201000000000000007 /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000007 /* AudioPlayerService.swift */; };
 		AA201000000000000008 /* MusicLibraryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000008 /* MusicLibraryManager.swift */; };
@@ -26,7 +28,8 @@
 		AA101000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA101000000000000003 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		AA101000000000000004 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
-		AA101000000000000005 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AA101000000000000005 /* SettingsView.swift */;
+				AA101000000000000006 /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		AA101000000000000006 /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
 		AA101000000000000007 /* AudioPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerService.swift; sourceTree = "<group>"; };
 		AA101000000000000008 /* MusicLibraryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryManager.swift; sourceTree = "<group>"; };
@@ -79,7 +82,8 @@
 			children = (
 				AA101000000000000003 /* LibraryView.swift */,
 				AA101000000000000004 /* NowPlayingView.swift */,
-				AA101000000000000005 /* SettingsView.swift */,
+				AA101000000000000005 /* SettingsView.swift */;
+				AA101000000000000006 /* MiniPlayerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -192,7 +196,8 @@
 				AA201000000000000002 /* ContentView.swift in Sources */,
 				AA201000000000000003 /* LibraryView.swift in Sources */,
 				AA201000000000000004 /* NowPlayingView.swift in Sources */,
-				AA201000000000000005 /* SettingsView.swift in Sources */,
+				AA201000000000000005 /* SettingsView.swift in Sources */;
+				AA201000000000000006 /* MiniPlayerView.swift in Sources */,
 				AA201000000000000006 /* Track.swift in Sources */,
 				AA201000000000000007 /* AudioPlayerService.swift in Sources */,
 				AA201000000000000008 /* MusicLibraryManager.swift in Sources */,
