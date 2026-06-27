@@ -19,6 +19,8 @@
 		AA20100000000000000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA10100000000000000A /* Assets.xcassets */; };
 		AA20100000000000000B /* MediaPlayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA10100000000000000B /* MediaPlayer.framework */; };
 		AA20100000000000000C /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA10100000000000000C /* AVFoundation.framework */; };
+		AA20100000000000000D /* iPodClassicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10100000000000000F /* iPodClassicView.swift */; };
+		AA20100000000000000E /* ClickWheelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA101000000000000010 /* ClickWheelView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +37,8 @@
 		AA10100000000000000B /* MediaPlayer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaPlayer.framework; path = System/Library/Frameworks/MediaPlayer.framework; sourceTree = SDKROOT; };
 		AA10100000000000000C /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		AA10100000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA10100000000000000F /* iPodClassicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPodClassicView.swift; sourceTree = "<group>"; };
+		AA101000000000000010 /* ClickWheelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickWheelView.swift; sourceTree = "<group>"; };
 		AA10100000000000000E /* MusicPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusicPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -80,6 +84,8 @@
 				AA101000000000000003 /* LibraryView.swift */,
 				AA101000000000000004 /* NowPlayingView.swift */,
 				AA101000000000000005 /* SettingsView.swift */,
+				AA10100000000000000F /* iPodClassicView.swift */,
+				AA101000000000000010 /* ClickWheelView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -197,6 +203,8 @@
 				AA201000000000000007 /* AudioPlayerService.swift in Sources */,
 				AA201000000000000008 /* MusicLibraryManager.swift in Sources */,
 				AA201000000000000009 /* LastFMService.swift in Sources */,
+				AA20100000000000000D /* iPodClassicView.swift in Sources */,
+				AA20100000000000000E /* ClickWheelView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
