@@ -3,6 +3,10 @@ import AVFoundation
 import MediaPlayer
 import Combine
 
+enum RepeatMode: String, CaseIterable {
+    case off, one, all
+}
+
 class AudioPlayerService: NSObject, ObservableObject {
     static let shared = AudioPlayerService()
 
@@ -13,13 +17,15 @@ class AudioPlayerService: NSObject, ObservableObject {
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var volume: Float = 0.8
+    @Published var repeatMode: RepeatMode = .off
+    @Published var isShuffled: Bool = false
 
+    private var originalQueue: [Track] = []   // pre-shuffle order
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var scrobbleTimer: Timer?
     private var trackStartTime: Date?
     private var hasScrobbled = false
-    private var nowPlayingPosted = false
 
     private override init() {
         super.init()
@@ -27,13 +33,14 @@ class AudioPlayerService: NSObject, ObservableObject {
         setupRemoteCommandCenter()
     }
 
+    // MARK: - Setup
+
     private func setupAudioSession() {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         } catch {
             print("Audio session category error: \(error)")
         }
-        // Activate off the main thread to avoid UI unresponsiveness warning
         Task.detached {
             try? AVAudioSession.sharedInstance().setActive(true)
         }
@@ -41,32 +48,42 @@ class AudioPlayerService: NSObject, ObservableObject {
 
     private func setupRemoteCommandCenter() {
         let center = MPRemoteCommandCenter.shared()
-        center.playCommand.addTarget { [weak self] _ in
-            self?.resume(); return .success
-        }
-        center.pauseCommand.addTarget { [weak self] _ in
-            self?.pause(); return .success
-        }
-        center.nextTrackCommand.addTarget { [weak self] _ in
-            self?.next(); return .success
-        }
-        center.previousTrackCommand.addTarget { [weak self] _ in
-            self?.previous(); return .success
-        }
+        center.playCommand.addTarget  { [weak self] _ in self?.resume();   return .success }
+        center.pauseCommand.addTarget { [weak self] _ in self?.pause();    return .success }
+        center.nextTrackCommand.addTarget     { [weak self] _ in self?.next();     return .success }
+        center.previousTrackCommand.addTarget { [weak self] _ in self?.previous(); return .success }
         center.changePlaybackPositionCommand.addTarget { [weak self] event in
-            if let e = event as? MPChangePlaybackPositionCommandEvent {
-                self?.seek(to: e.positionTime)
-            }
+            if let e = event as? MPChangePlaybackPositionCommandEvent { self?.seek(to: e.positionTime) }
             return .success
         }
     }
+
+    // MARK: - Playback
 
     func play(track: Track, queue: [Track] = [], index: Int = 0) {
         guard let url = track.assetURL else { return }
         cancelScrobbleState()
 
-        self.queue = queue.isEmpty ? [track] : queue
-        self.queueIndex = index
+        let newQueue = queue.isEmpty ? [track] : queue
+        originalQueue = newQueue
+
+        if isShuffled {
+            var shuffled = newQueue
+            shuffled.remove(at: index)
+            shuffled.shuffle()
+            shuffled.insert(track, at: 0)
+            self.queue = shuffled
+            self.queueIndex = 0
+        } else {
+            self.queue = newQueue
+            self.queueIndex = index
+        }
+
+        loadAndPlay(track: track)
+    }
+
+    private func loadAndPlay(track: Track) {
+        guard let url = track.assetURL else { return }
 
         let item = AVPlayerItem(url: url)
         if player == nil {
@@ -88,11 +105,11 @@ class AudioPlayerService: NSObject, ObservableObject {
         }
 
         NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(trackDidEnd), name: .AVPlayerItemDidPlayToEndTime, object: item)
+        NotificationCenter.default.addObserver(self, selector: #selector(trackDidEnd),
+                                               name: .AVPlayerItemDidPlayToEndTime, object: item)
 
         currentTrack = track
         hasScrobbled = false
-        nowPlayingPosted = false
         trackStartTime = Date()
 
         player?.play()
@@ -100,15 +117,13 @@ class AudioPlayerService: NSObject, ObservableObject {
         updateNowPlayingInfo()
         startScrobbleTimer()
 
-        Task {
-            await LastFMService.shared.updateNowPlaying(track: track)
-        }
+        Task { await LastFMService.shared.updateNowPlaying(track: track) }
     }
 
     func pause() {
         player?.pause()
         isPlaying = false
-        scrobbleTimer?.invalidate()   // don't count paused time toward scrobble threshold
+        scrobbleTimer?.invalidate()
         scrobbleTimer = nil
         updateNowPlayingInfo()
     }
@@ -117,48 +132,79 @@ class AudioPlayerService: NSObject, ObservableObject {
         player?.play()
         isPlaying = true
         updateNowPlayingInfo()
-        startScrobbleTimer()          // restart timer for remaining threshold time
+        startScrobbleTimer()
     }
 
-    func togglePlayPause() {
-        isPlaying ? pause() : resume()
-    }
+    func togglePlayPause() { isPlaying ? pause() : resume() }
 
     func seek(to time: Double) {
-        let target = CMTime(seconds: time, preferredTimescale: 600)
-        player?.seek(to: target)
+        player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
     }
 
     func next() {
         guard !queue.isEmpty else { return }
-        let nextIndex = (queueIndex + 1) % queue.count
-        play(track: queue[nextIndex], queue: queue, index: nextIndex)
+        switch repeatMode {
+        case .one:
+            seek(to: 0); resume()
+        case .all:
+            let i = (queueIndex + 1) % queue.count
+            queueIndex = i
+            loadAndPlay(track: queue[i])
+        case .off:
+            let i = queueIndex + 1
+            guard i < queue.count else { pause(); return }
+            queueIndex = i
+            loadAndPlay(track: queue[i])
+        }
     }
 
     func previous() {
         guard !queue.isEmpty else { return }
-        if currentTime > 3 {
-            seek(to: 0)
-            return
-        }
-        let prevIndex = queueIndex == 0 ? queue.count - 1 : queueIndex - 1
-        play(track: queue[prevIndex], queue: queue, index: prevIndex)
+        if currentTime > 3 { seek(to: 0); return }
+        let i = max(0, queueIndex - 1)
+        queueIndex = i
+        loadAndPlay(track: queue[i])
     }
 
-    func setVolume(_ v: Float) {
-        volume = v
-        player?.volume = v
+    func setVolume(_ v: Float) { volume = v; player?.volume = v }
+
+    // MARK: - Shuffle / Repeat
+
+    func toggleShuffle() {
+        isShuffled.toggle()
+        guard let current = currentTrack else { return }
+        if isShuffled {
+            var others = originalQueue
+            if let idx = others.firstIndex(of: current) { others.remove(at: idx) }
+            others.shuffle()
+            queue = [current] + others
+            queueIndex = 0
+        } else {
+            queue = originalQueue
+            queueIndex = originalQueue.firstIndex(of: current) ?? 0
+        }
     }
+
+    func cycleRepeat() {
+        switch repeatMode {
+        case .off: repeatMode = .all
+        case .all: repeatMode = .one
+        case .one: repeatMode = .off
+        }
+    }
+
+    // MARK: - Track end
 
     @objc private func trackDidEnd() {
         scrobbleCurrentTrack()
         next()
     }
 
+    // MARK: - Scrobble
+
     private func startScrobbleTimer() {
         scrobbleTimer?.invalidate()
         guard let track = currentTrack, !hasScrobbled else { return }
-        // Fire when playback time reaches min(duration/2, 240s); subtract already-played time
         let threshold = min(track.duration / 2, 240)
         let remaining = max(threshold - currentTime, 1)
         scrobbleTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
@@ -171,9 +217,7 @@ class AudioPlayerService: NSObject, ObservableObject {
         guard track.duration > 30 else { return }
         hasScrobbled = true
         let timestamp = Int(startTime.timeIntervalSince1970)
-        Task {
-            await LastFMService.shared.scrobble(track: track, timestamp: timestamp)
-        }
+        Task { await LastFMService.shared.scrobble(track: track, timestamp: timestamp) }
     }
 
     private func cancelScrobbleState() {
@@ -184,11 +228,10 @@ class AudioPlayerService: NSObject, ObservableObject {
     }
 
     private func removeTimeObserver() {
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
-            timeObserver = nil
-        }
+        if let obs = timeObserver { player?.removeTimeObserver(obs); timeObserver = nil }
     }
+
+    // MARK: - Lock screen
 
     private func updateNowPlayingInfo() {
         guard let track = currentTrack else {
@@ -196,18 +239,17 @@ class AudioPlayerService: NSObject, ObservableObject {
             return
         }
         var info: [String: Any] = [
-            MPMediaItemPropertyTitle: track.title,
-            MPMediaItemPropertyArtist: track.artist,
-            MPMediaItemPropertyAlbumTitle: track.album,
-            MPMediaItemPropertyPlaybackDuration: track.duration,
+            MPMediaItemPropertyTitle:              track.title,
+            MPMediaItemPropertyArtist:             track.artist,
+            MPMediaItemPropertyAlbumTitle:         track.album,
+            MPMediaItemPropertyPlaybackDuration:   track.duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
+            MPNowPlayingInfoPropertyPlaybackRate:  isPlaying ? 1.0 : 0.0
         ]
         if let artwork = track.artwork {
             info[MPMediaItemPropertyArtwork] = artwork
         } else if let img = track.localArtwork {
-            let mpArt = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
-            info[MPMediaItemPropertyArtwork] = mpArt
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }

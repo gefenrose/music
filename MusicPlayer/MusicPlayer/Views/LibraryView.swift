@@ -1,5 +1,35 @@
 import SwiftUI
 
+// MARK: - View Mode
+
+enum LibraryViewMode: String {
+    case list, grid, card
+}
+
+// MARK: - View mode picker toolbar item
+
+struct ViewModePicker: View {
+    @Binding var mode: LibraryViewMode
+
+    var body: some View {
+        Menu {
+            Button { mode = .list } label: { Label("List",  systemImage: "list.bullet") }
+            Button { mode = .grid } label: { Label("Grid",  systemImage: "square.grid.2x2") }
+            Button { mode = .card } label: { Label("Card",  systemImage: "rectangle.stack") }
+        } label: {
+            Image(systemName: iconName)
+        }
+    }
+
+    private var iconName: String {
+        switch mode {
+        case .list: return "list.bullet"
+        case .grid: return "square.grid.2x2"
+        case .card: return "rectangle.stack"
+        }
+    }
+}
+
 // MARK: - Library root
 
 struct LibraryView: View {
@@ -9,10 +39,26 @@ struct LibraryView: View {
     @State private var tab: LibraryTab = .songs
     @State private var searchText = ""
 
+    @AppStorage("viewMode.songs")   private var songsModeRaw:   String = LibraryViewMode.list.rawValue
+    @AppStorage("viewMode.albums")  private var albumsModeRaw:  String = LibraryViewMode.grid.rawValue
+    @AppStorage("viewMode.artists") private var artistsModeRaw: String = LibraryViewMode.list.rawValue
+
+    private var songsMode:   LibraryViewMode { LibraryViewMode(rawValue: songsModeRaw)   ?? .list }
+    private var albumsMode:  LibraryViewMode { LibraryViewMode(rawValue: albumsModeRaw)  ?? .grid }
+    private var artistsMode: LibraryViewMode { LibraryViewMode(rawValue: artistsModeRaw) ?? .list }
+
     enum LibraryTab: String, CaseIterable {
         case songs   = "Songs"
         case albums  = "Albums"
         case artists = "Artists"
+    }
+
+    private var currentModeBinding: Binding<LibraryViewMode> {
+        switch tab {
+        case .songs:   return Binding(get: { self.songsMode },   set: { self.songsModeRaw   = $0.rawValue })
+        case .albums:  return Binding(get: { self.albumsMode },  set: { self.albumsModeRaw  = $0.rawValue })
+        case .artists: return Binding(get: { self.artistsMode }, set: { self.artistsModeRaw = $0.rawValue })
+        }
     }
 
     var body: some View {
@@ -31,13 +77,21 @@ struct LibraryView: View {
                     Spacer()
                 } else {
                     switch tab {
-                    case .songs:   SongsListView(searchText: searchText)
-                    case .albums:  AlbumsListView(searchText: searchText)
-                    case .artists: ArtistsListView(searchText: searchText)
+                    case .songs:
+                        SongsListView(searchText: searchText, mode: songsMode)
+                    case .albums:
+                        AlbumsListView(searchText: searchText, mode: albumsMode)
+                    case .artists:
+                        ArtistsListView(searchText: searchText, mode: artistsMode)
                     }
                 }
             }
             .navigationTitle("Library")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ViewModePicker(mode: currentModeBinding)
+                }
+            }
             .searchable(text: $searchText, prompt: "Search")
         }
     }
@@ -49,6 +103,7 @@ struct SongsListView: View {
     @EnvironmentObject var library: MusicLibraryManager
     @EnvironmentObject var player:  AudioPlayerService
     let searchText: String
+    let mode: LibraryViewMode
 
     var songs: [Track] {
         searchText.isEmpty ? library.songs
@@ -57,54 +112,114 @@ struct SongsListView: View {
     }
 
     var body: some View {
+        switch mode {
+        case .list: songsList
+        case .grid: songsGrid
+        case .card: songsCards
+        }
+    }
+
+    // List
+    private var songsList: some View {
         List(songs) { track in
             SongRow(track: track, isPlaying: player.currentTrack?.id == track.id && player.isPlaying)
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    if let idx = library.songs.firstIndex(of: track) {
-                        player.play(track: track, queue: library.songs, index: idx)
-                    }
-                }
+                .onTapGesture { playTrack(track) }
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
         }
         .listStyle(.plain)
     }
+
+    // Grid (2 columns)
+    private var songsGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                ForEach(songs) { track in
+                    SongGridCell(track: track, isPlaying: player.currentTrack?.id == track.id && player.isPlaying)
+                        .onTapGesture { playTrack(track) }
+                }
+            }
+            .padding()
+        }
+    }
+
+    // Card (full-width horizontal cards)
+    private var songsCards: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(songs) { track in
+                    SongCard(track: track, isPlaying: player.currentTrack?.id == track.id && player.isPlaying)
+                        .onTapGesture { playTrack(track) }
+                }
+            }
+            .padding()
+        }
+    }
+
+    private func playTrack(_ track: Track) {
+        if let idx = library.songs.firstIndex(of: track) {
+            player.play(track: track, queue: library.songs, index: idx)
+        }
+    }
 }
 
-struct SongRow: View {
+struct SongGridCell: View {
     let track: Track
     let isPlaying: Bool
+    @State private var img: UIImage?
 
     var body: some View {
-        HStack(spacing: 12) {
-            ArtworkThumbnail(track: track, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(track.title)
-                    .font(.body)
-                    .foregroundColor(isPlaying ? .accentColor : .primary)
-                    .lineLimit(1)
-                Text(track.artist)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let img { Image(uiImage: img).resizable().aspectRatio(contentMode: .fill) }
+                    else { Color(.systemGray5).overlay(Image(systemName: "music.note").foregroundColor(.secondary)) }
+                }
+                .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                if isPlaying {
+                    Image(systemName: "waveform").foregroundColor(.accentColor)
+                        .symbolEffect(.variableColor.iterative)
+                        .padding(6).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .padding(4)
+                }
+            }
+            Text(track.title).font(.caption).bold().lineLimit(1).foregroundColor(isPlaying ? .accentColor : .primary)
+            Text(track.artist).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+        }
+        .task(id: track.id) { img = track.artworkImage(size: CGSize(width: 200, height: 200)) }
+    }
+}
+
+struct SongCard: View {
+    let track: Track
+    let isPlaying: Bool
+    @State private var img: UIImage?
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Group {
+                if let img { Image(uiImage: img).resizable().aspectRatio(contentMode: .fill) }
+                else { Color(.systemGray5).overlay(Image(systemName: "music.note").foregroundColor(.secondary)) }
+            }
+            .frame(width: 70, height: 70)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(track.title).font(.body).bold().lineLimit(1).foregroundColor(isPlaying ? .accentColor : .primary)
+                Text(track.artist).font(.subheadline).foregroundColor(.secondary).lineLimit(1)
+                Text(track.album).font(.caption).foregroundColor(.secondary).lineLimit(1)
             }
             Spacer()
             if isPlaying {
-                Image(systemName: "waveform")
-                    .foregroundColor(.accentColor)
+                Image(systemName: "waveform").foregroundColor(.accentColor)
                     .symbolEffect(.variableColor.iterative)
-            } else {
-                Text(formatDuration(track.duration))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
         }
-        .padding(.vertical, 2)
-    }
-
-    private func formatDuration(_ s: Double) -> String {
-        guard s > 0, s.isFinite else { return "" }
-        return String(format: "%d:%02d", Int(s) / 60, Int(s) % 60)
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .task(id: track.id) { img = track.artworkImage(size: CGSize(width: 140, height: 140)) }
     }
 }
 
@@ -114,6 +229,7 @@ struct AlbumsListView: View {
     @EnvironmentObject var library: MusicLibraryManager
     @EnvironmentObject var player:  AudioPlayerService
     let searchText: String
+    let mode: LibraryViewMode
 
     var albums: [AlbumGroup] {
         searchText.isEmpty ? library.albums
@@ -122,6 +238,14 @@ struct AlbumsListView: View {
     }
 
     var body: some View {
+        switch mode {
+        case .list: albumsList
+        case .grid: albumsGrid
+        case .card: albumsCards
+        }
+    }
+
+    private var albumsList: some View {
         List(albums) { album in
             NavigationLink {
                 AlbumDetailView(album: album).environmentObject(player)
@@ -131,6 +255,86 @@ struct AlbumsListView: View {
             .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
         }
         .listStyle(.plain)
+    }
+
+    private var albumsGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                ForEach(albums) { album in
+                    NavigationLink {
+                        AlbumDetailView(album: album).environmentObject(player)
+                    } label: {
+                        AlbumGridCell(album: album)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+        }
+    }
+
+    private var albumsCards: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(albums) { album in
+                    NavigationLink {
+                        AlbumDetailView(album: album).environmentObject(player)
+                    } label: {
+                        AlbumCard(album: album)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+        }
+    }
+}
+
+struct AlbumGridCell: View {
+    let album: AlbumGroup
+    @State private var img: UIImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Group {
+                if let img { Image(uiImage: img).resizable().aspectRatio(contentMode: .fill) }
+                else { Color(.systemGray5).overlay(Image(systemName: "music.note").foregroundColor(.secondary)) }
+            }
+            .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Text(album.title).font(.caption).bold().lineLimit(1)
+            Text(album.artist).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+        }
+        .task(id: album.id) { img = album.tracks.first?.artworkImage(size: CGSize(width: 200, height: 200)) }
+    }
+}
+
+struct AlbumCard: View {
+    let album: AlbumGroup
+    @State private var img: UIImage?
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Group {
+                if let img { Image(uiImage: img).resizable().aspectRatio(contentMode: .fill) }
+                else { Color(.systemGray5).overlay(Image(systemName: "music.note").foregroundColor(.secondary)) }
+            }
+            .frame(width: 70, height: 70)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(album.title).font(.body).bold().lineLimit(1)
+                Text(album.artist).font(.subheadline).foregroundColor(.secondary).lineLimit(1)
+                Text("\(album.tracks.count) song\(album.tracks.count == 1 ? "" : "s")")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundColor(.secondary).font(.caption)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .task(id: album.id) { img = album.tracks.first?.artworkImage(size: CGSize(width: 140, height: 140)) }
     }
 }
 
@@ -155,6 +359,7 @@ struct ArtistsListView: View {
     @EnvironmentObject var library: MusicLibraryManager
     @EnvironmentObject var player:  AudioPlayerService
     let searchText: String
+    let mode: LibraryViewMode
 
     var artists: [ArtistGroup] {
         searchText.isEmpty ? library.artists
@@ -162,14 +367,21 @@ struct ArtistsListView: View {
     }
 
     var body: some View {
+        switch mode {
+        case .list: artistsList
+        case .grid: artistsGrid
+        case .card: artistsCards
+        }
+    }
+
+    private var artistsList: some View {
         List(artists) { artist in
             NavigationLink {
                 ArtistDetailView(artist: artist).environmentObject(player)
             } label: {
                 HStack {
                     Image(systemName: "person.circle.fill")
-                        .font(.system(size: 36))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 36)).foregroundColor(.secondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(artist.name).font(.body).lineLimit(1)
                         Text("\(artist.tracks.count) song\(artist.tracks.count == 1 ? "" : "s")")
@@ -180,6 +392,75 @@ struct ArtistsListView: View {
             }
         }
         .listStyle(.plain)
+    }
+
+    private var artistsGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                ForEach(artists) { artist in
+                    NavigationLink {
+                        ArtistDetailView(artist: artist).environmentObject(player)
+                    } label: {
+                        ArtistGridCell(artist: artist)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+        }
+    }
+
+    private var artistsCards: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(artists) { artist in
+                    NavigationLink {
+                        ArtistDetailView(artist: artist).environmentObject(player)
+                    } label: {
+                        ArtistCard(artist: artist)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+        }
+    }
+}
+
+struct ArtistGridCell: View {
+    let artist: ArtistGroup
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "person.circle.fill")
+                .font(.system(size: 70)).foregroundColor(.secondary)
+                .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
+            Text(artist.name).font(.caption).bold().lineLimit(1)
+            Text("\(artist.tracks.count) song\(artist.tracks.count == 1 ? "" : "s")")
+                .font(.caption2).foregroundColor(.secondary)
+        }
+    }
+}
+
+struct ArtistCard: View {
+    let artist: ArtistGroup
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "person.circle.fill")
+                .font(.system(size: 50)).foregroundColor(.secondary)
+                .frame(width: 70, height: 70)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(artist.name).font(.body).bold().lineLimit(1)
+                Text("\(artist.tracks.count) song\(artist.tracks.count == 1 ? "" : "s")")
+                    .font(.subheadline).foregroundColor(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundColor(.secondary).font(.caption)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -351,5 +632,44 @@ struct ArtworkView: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.1))
+    }
+}
+
+// MARK: - Song row (shared)
+
+struct SongRow: View {
+    let track: Track
+    let isPlaying: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ArtworkThumbnail(track: track, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(track.title)
+                    .font(.body)
+                    .foregroundColor(isPlaying ? .accentColor : .primary)
+                    .lineLimit(1)
+                Text(track.artist)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if isPlaying {
+                Image(systemName: "waveform")
+                    .foregroundColor(.accentColor)
+                    .symbolEffect(.variableColor.iterative)
+            } else {
+                Text(formatDuration(track.duration))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func formatDuration(_ s: Double) -> String {
+        guard s > 0, s.isFinite else { return "" }
+        return String(format: "%d:%02d", Int(s) / 60, Int(s) % 60)
     }
 }

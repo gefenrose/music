@@ -118,6 +118,26 @@ struct NowPlayingContent: View {
 
             Spacer(minLength: 24)
 
+            // Shuffle / Repeat row
+            HStack {
+                Spacer()
+                Button { player.toggleShuffle() } label: {
+                    Image(systemName: "shuffle")
+                        .font(.system(size: 20))
+                        .foregroundColor(player.isShuffled ? .accentColor : .secondary)
+                }
+                Spacer()
+                Button { player.cycleRepeat() } label: {
+                    Image(systemName: repeatIcon)
+                        .font(.system(size: 20))
+                        .foregroundColor(player.repeatMode == .off ? .secondary : .accentColor)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 32)
+
+            Spacer(minLength: 16)
+
             // Transport controls
             HStack(spacing: 0) {
                 Spacer()
@@ -154,6 +174,14 @@ struct NowPlayingContent: View {
             .padding(.horizontal, 32)
 
             Spacer(minLength: 32)
+        }
+    }
+
+    private var repeatIcon: String {
+        switch player.repeatMode {
+        case .off: return "repeat"
+        case .all: return "repeat"
+        case .one: return "repeat.1"
         }
     }
 
