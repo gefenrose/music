@@ -84,7 +84,9 @@ class LastFMService: ObservableObject {
         ]
         params["api_sig"] = signature(for: params, secret: apiSecret)
         params["format"] = "json"
-        _ = try? await post(params: params)
+        if let data = try? await post(params: params) {
+            await handleAPIError(data: data)
+        }
     }
 
     func scrobble(track: Track, timestamp: Int) async {
@@ -101,7 +103,23 @@ class LastFMService: ObservableObject {
         ]
         params["api_sig"] = signature(for: params, secret: apiSecret)
         params["format"] = "json"
-        _ = try? await post(params: params)
+        if let data = try? await post(params: params) {
+            await handleAPIError(data: data)
+        }
+    }
+
+    // Last.fm returns HTTP 200 even for errors; check the JSON body.
+    // Error 9 = invalid session key → force re-login.
+    @MainActor
+    private func handleAPIError(data: Data) {
+        guard let obj = try? JSONDecoder().decode(LastFMErrorResponse.self, from: data) else { return }
+        if obj.error == 9 {
+            // Session expired — clear auth and let the user know
+            sessionKey = ""
+            isAuthenticated = false
+            defaults.removeObject(forKey: "lastfm_session_key")
+            errorMessage = "Last.fm session expired. Please sign in again in Settings."
+        }
     }
 
     private func signature(for params: [String: String], secret: String) -> String {
@@ -151,4 +169,9 @@ private struct AuthResponse: Decodable {
         let name: String
         let key: String
     }
+}
+
+private struct LastFMErrorResponse: Decodable {
+    let error: Int
+    let message: String
 }
