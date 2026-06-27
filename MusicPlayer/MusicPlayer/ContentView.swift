@@ -1,13 +1,31 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var player: AudioPlayerService
+    @EnvironmentObject var player:  AudioPlayerService
     @EnvironmentObject var library: MusicLibraryManager
-    @EnvironmentObject var lastFM: LastFMService
+    @EnvironmentObject var lastFM:  LastFMService
+
+    @State private var showNowPlaying = false
 
     var body: some View {
-        iPodClassicView()
-            .ignoresSafeArea()
-            .onAppear { library.requestAuthorization() }
+        TabView {
+            LibraryView(showNowPlaying: $showNowPlaying)
+                .tabItem { Label("Library", systemImage: "music.note.list") }
+
+            SettingsView()
+                .environmentObject(lastFM)
+                .environmentObject(library)
+                .tabItem { Label("Settings", systemImage: "gear") }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if player.currentTrack != nil {
+                MiniPlayerView(showNowPlaying: $showNowPlaying)
+            }
+        }
+        .sheet(isPresented: $showNowPlaying) {
+            NowPlayingSheet()
+                .environmentObject(player)
+        }
+        .onAppear { library.requestAuthorization() }
     }
 }
