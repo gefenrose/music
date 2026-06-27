@@ -78,7 +78,7 @@ struct iPodClassicView: View {
                 // ── Physical bezel / gap ─────────────────────────────
                 Color.black.frame(height: 16)
 
-                // ── Click wheel area ─────────────────────────────────
+                // ── Click wheel area + home indicator (unified gradient) ────
                 wheelArea(geo: geo)
                     .clipShape(
                         UnevenRoundedRectangle(
@@ -87,9 +87,6 @@ struct iPodClassicView: View {
                         )
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                // ── Home indicator safe area — continuation of wheel background ──
-                Color(white: 0.80).frame(height: bottomSafeArea())
             }
         }
         .background(Color.black)
@@ -222,15 +219,19 @@ struct iPodClassicView: View {
             }
 
             let wd = min(geo.size.width * 0.78, 308.0)
-            ClickWheelView(
-                onMenu:      navigateBack,
-                onPrevious:  handlePrevious,
-                onNext:      handleNext,
-                onPlayPause: { player.togglePlayPause(); impact(.medium) },
-                onCenter:    handleCenter,
-                onScroll:    handleScroll
-            )
-            .frame(width: wd, height: wd)
+            VStack(spacing: 0) {
+                ClickWheelView(
+                    onMenu:      navigateBack,
+                    onPrevious:  handlePrevious,
+                    onNext:      handleNext,
+                    onPlayPause: { player.togglePlayPause(); impact(.medium) },
+                    onCenter:    handleCenter,
+                    onScroll:    handleScroll
+                )
+                .frame(width: wd, height: wd)
+                // Push wheel up so gradient covers home indicator area
+                Spacer().frame(height: bottomSafeArea())
+            }
         }
     }
 
