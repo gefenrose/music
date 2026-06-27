@@ -128,7 +128,7 @@ struct SettingsView: View {
             .onChange(of: apiSecret) { _, v in lastFM.apiSecret = v; lastFM.save() }
             .fileImporter(
                 isPresented: $showImporter,
-                allowedContentTypes: [.audio, .mp3, .mpeg4Audio, .wav, .aiff],
+                allowedContentTypes: [.audio],  // .audio covers all subtypes incl. FLAC
                 allowsMultipleSelection: true
             ) { result in
                 switch result {

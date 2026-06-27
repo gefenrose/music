@@ -14,7 +14,7 @@ class MusicLibraryManager: ObservableObject {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
-    private static let audioExtensions = Set(["mp3", "m4a", "aac", "wav", "aiff", "flac"])
+    private static let audioExtensions = Set(["mp3", "m4a", "aac", "wav", "aiff", "aif", "flac"])
 
     private init() {}
 
@@ -96,8 +96,10 @@ class MusicLibraryManager: ObservableObject {
 
     func deleteLocalFile(track: Track) {
         guard let url = track.assetURL, track.id.hasPrefix("local:") else { return }
-        try? FileManager.default.removeItem(at: url)
-        loadLibrary()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            try? FileManager.default.removeItem(at: url)
+            DispatchQueue.main.async { self?.loadLibrary() }
+        }
     }
 
     private static func scanLocalFiles() -> [Track] {
