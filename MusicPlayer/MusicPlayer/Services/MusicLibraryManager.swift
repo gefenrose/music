@@ -79,14 +79,16 @@ class MusicLibraryManager: ObservableObject {
     @Published var authorizationStatus: MPMediaLibraryAuthorizationStatus = .notDetermined
     @Published var isLoading = false
 
+    private var authorizationRequested = false
     private init() {}
 
     func requestAuthorization() {
         authorizationStatus = MPMediaLibrary.authorizationStatus()
-        guard authorizationStatus == .notDetermined else {
+        guard authorizationStatus == .notDetermined, !authorizationRequested else {
             loadLibrary()
             return
         }
+        authorizationRequested = true
         MPMediaLibrary.requestAuthorization { [weak self] status in
             DispatchQueue.main.async {
                 self?.authorizationStatus = status

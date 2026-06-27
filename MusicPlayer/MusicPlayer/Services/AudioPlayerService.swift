@@ -108,6 +108,8 @@ class AudioPlayerService: NSObject, ObservableObject {
     func pause() {
         player?.pause()
         isPlaying = false
+        scrobbleTimer?.invalidate()   // don't count paused time toward scrobble threshold
+        scrobbleTimer = nil
         updateNowPlayingInfo()
     }
 
@@ -115,6 +117,7 @@ class AudioPlayerService: NSObject, ObservableObject {
         player?.play()
         isPlaying = true
         updateNowPlayingInfo()
+        startScrobbleTimer()          // restart timer for remaining threshold time
     }
 
     func togglePlayPause() {
@@ -154,9 +157,11 @@ class AudioPlayerService: NSObject, ObservableObject {
 
     private func startScrobbleTimer() {
         scrobbleTimer?.invalidate()
-        guard let track = currentTrack else { return }
-        let scrobbleAfter = min(track.duration / 2, 240)
-        scrobbleTimer = Timer.scheduledTimer(withTimeInterval: scrobbleAfter, repeats: false) { [weak self] _ in
+        guard let track = currentTrack, !hasScrobbled else { return }
+        // Fire when playback time reaches min(duration/2, 240s); subtract already-played time
+        let threshold = min(track.duration / 2, 240)
+        let remaining = max(threshold - currentTime, 1)
+        scrobbleTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
             self?.scrobbleCurrentTrack()
         }
     }
