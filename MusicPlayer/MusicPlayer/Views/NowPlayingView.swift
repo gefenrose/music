@@ -32,7 +32,7 @@ struct PlayerContentView: View {
             Spacer()
 
             // Album Art
-            ArtworkView(artwork: track.artwork, size: 280)
+            ArtworkView(image: track.artworkImage(size: CGSize(width: 280, height: 280)), size: 280)
                 .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
                 .scaleEffect(player.isPlaying ? 1.0 : 0.9)
                 .animation(.spring(response: 0.4), value: player.isPlaying)
