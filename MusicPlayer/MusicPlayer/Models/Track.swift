@@ -40,17 +40,16 @@ struct Track: Identifiable, Equatable {
         let metadata = (try? await asset.load(.commonMetadata)) ?? []
         for item in metadata {
             guard let key = item.commonKey else { continue }
+            let value = try? await item.load(.value)
             switch key {
             case .commonKeyTitle:
-                title = (try? await item.load(.stringValue)) ?? title
+                if let v = value as? String { title = v }
             case .commonKeyArtist:
-                artist = (try? await item.load(.stringValue)) ?? artist
+                if let v = value as? String { artist = v }
             case .commonKeyAlbumName:
-                album = (try? await item.load(.stringValue)) ?? album
+                if let v = value as? String { album = v }
             case .commonKeyArtwork:
-                if let data = try? await item.load(.dataValue) {
-                    artworkImage = UIImage(data: data)
-                }
+                if let data = value as? Data { artworkImage = UIImage(data: data) }
             default:
                 break
             }
