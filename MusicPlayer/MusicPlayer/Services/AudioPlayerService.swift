@@ -78,8 +78,10 @@ class AudioPlayerService: NSObject, ObservableObject {
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
             queue: .main
         ) { [weak self] time in
-            self?.currentTime = time.seconds
-            self?.duration = self?.player?.currentItem?.duration.seconds ?? 0
+            let t = time.seconds
+            self?.currentTime = t.isFinite ? t : 0
+            let d = self?.player?.currentItem?.duration.seconds ?? 0
+            self?.duration = (d.isFinite && d > 0) ? d : 0
         }
 
         NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)

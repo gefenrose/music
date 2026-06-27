@@ -1,6 +1,36 @@
 import SwiftUI
 import MediaPlayer
 
+// MARK: - Album detail header (async art load)
+
+private struct AlbumDetailHeaderView: View {
+    let artwork: MPMediaItemArtwork
+    let title: String
+    let albumId: String
+    @State private var img: UIImage?
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Group {
+                if let img {
+                    Image(uiImage: img).resizable().aspectRatio(contentMode: .fit)
+                } else {
+                    Color(white: 0.85)
+                }
+            }
+            .frame(height: 100)
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .padding(.bottom, 4)
+        }
+        .task(id: albumId) {
+            img = artwork.image(at: CGSize(width: 200, height: 200))
+        }
+    }
+}
+
 // MARK: - Album thumbnail (loads image once, off the render hot-path)
 
 private struct AlbumThumbView: View {
@@ -121,6 +151,7 @@ struct iPodClassicView: View {
         }
         .onChange(of: currentPage) { _, _ in
             if selectedIndices[currentPage] == nil { selectedIndices[currentPage] = 0 }
+            scrollAccum = 0
         }
     }
 
@@ -181,18 +212,8 @@ struct iPodClassicView: View {
     func albumDetailHeader() -> some View {
         if case .albumDetail(let id) = currentPage,
            let album = library.albums.first(where: { $0.id == id }),
-           let img   = album.artwork?.image(at: CGSize(width: 200, height: 200)) {
-            VStack(spacing: 4) {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: 100)
-                Text(album.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .padding(.bottom, 4)
-            }
+           let artwork = album.artwork {
+            AlbumDetailHeaderView(artwork: artwork, title: album.title, albumId: album.id)
         }
     }
 
@@ -370,6 +391,7 @@ struct iPodClassicView: View {
             if player.currentTime > 3 { player.seek(to: 0) }
             else { player.previous() }
         } else {
+            guard !menuItems.isEmpty else { return }
             setSelected(max(0, selectedIndex - 1))
         }
     }
@@ -377,7 +399,10 @@ struct iPodClassicView: View {
     func handleNext() {
         impact(.medium)
         if currentPage == .nowPlaying { player.next() }
-        else { setSelected(min(menuItems.count - 1, selectedIndex + 1)) }
+        else {
+            guard !menuItems.isEmpty else { return }
+            setSelected(min(menuItems.count - 1, selectedIndex + 1))
+        }
     }
 
     func impact(_ s: UIImpactFeedbackGenerator.FeedbackStyle) {
