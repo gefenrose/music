@@ -9,7 +9,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
-            LibraryView(showNowPlaying: $showNowPlaying)
+            LibraryView()
                 .tabItem { Label("Library", systemImage: "music.note.list") }
 
             SettingsView()

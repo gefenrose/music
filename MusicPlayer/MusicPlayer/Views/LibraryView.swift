@@ -1,11 +1,10 @@
 import SwiftUI
 
-// MARK: - Library root (Songs / Albums / Artists tabs)
+// MARK: - Library root
 
 struct LibraryView: View {
     @EnvironmentObject var library: MusicLibraryManager
     @EnvironmentObject var player:  AudioPlayerService
-    @Binding var showNowPlaying: Bool
 
     @State private var tab: LibraryTab = .songs
     @State private var searchText = ""
@@ -32,9 +31,9 @@ struct LibraryView: View {
                     Spacer()
                 } else {
                     switch tab {
-                    case .songs:   SongsListView(searchText: searchText, showNowPlaying: $showNowPlaying)
-                    case .albums:  AlbumsListView(searchText: searchText, showNowPlaying: $showNowPlaying)
-                    case .artists: ArtistsListView(searchText: searchText, showNowPlaying: $showNowPlaying)
+                    case .songs:   SongsListView(searchText: searchText)
+                    case .albums:  AlbumsListView(searchText: searchText)
+                    case .artists: ArtistsListView(searchText: searchText)
                     }
                 }
             }
@@ -50,7 +49,6 @@ struct SongsListView: View {
     @EnvironmentObject var library: MusicLibraryManager
     @EnvironmentObject var player:  AudioPlayerService
     let searchText: String
-    @Binding var showNowPlaying: Bool
 
     var songs: [Track] {
         searchText.isEmpty ? library.songs
@@ -65,7 +63,6 @@ struct SongsListView: View {
                 .onTapGesture {
                     if let idx = library.songs.firstIndex(of: track) {
                         player.play(track: track, queue: library.songs, index: idx)
-                        showNowPlaying = true
                     }
                 }
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
@@ -117,7 +114,6 @@ struct AlbumsListView: View {
     @EnvironmentObject var library: MusicLibraryManager
     @EnvironmentObject var player:  AudioPlayerService
     let searchText: String
-    @Binding var showNowPlaying: Bool
 
     var albums: [AlbumGroup] {
         searchText.isEmpty ? library.albums
@@ -128,8 +124,7 @@ struct AlbumsListView: View {
     var body: some View {
         List(albums) { album in
             NavigationLink {
-                AlbumDetailView(album: album, showNowPlaying: $showNowPlaying)
-                    .environmentObject(player)
+                AlbumDetailView(album: album).environmentObject(player)
             } label: {
                 AlbumRow(album: album)
             }
@@ -146,13 +141,8 @@ struct AlbumRow: View {
             ArtworkThumbnail(track: album.tracks.first, size: 50)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 2) {
-                Text(album.title)
-                    .font(.body)
-                    .lineLimit(1)
-                Text(album.artist)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+                Text(album.title).font(.body).lineLimit(1)
+                Text(album.artist).font(.subheadline).foregroundColor(.secondary).lineLimit(1)
             }
         }
         .padding(.vertical, 2)
@@ -165,7 +155,6 @@ struct ArtistsListView: View {
     @EnvironmentObject var library: MusicLibraryManager
     @EnvironmentObject var player:  AudioPlayerService
     let searchText: String
-    @Binding var showNowPlaying: Bool
 
     var artists: [ArtistGroup] {
         searchText.isEmpty ? library.artists
@@ -175,20 +164,16 @@ struct ArtistsListView: View {
     var body: some View {
         List(artists) { artist in
             NavigationLink {
-                ArtistDetailView(artist: artist, showNowPlaying: $showNowPlaying)
-                    .environmentObject(player)
+                ArtistDetailView(artist: artist).environmentObject(player)
             } label: {
                 HStack {
                     Image(systemName: "person.circle.fill")
                         .font(.system(size: 36))
                         .foregroundColor(.secondary)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(artist.name)
-                            .font(.body)
-                            .lineLimit(1)
+                        Text(artist.name).font(.body).lineLimit(1)
                         Text("\(artist.tracks.count) song\(artist.tracks.count == 1 ? "" : "s")")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.subheadline).foregroundColor(.secondary)
                     }
                 }
                 .padding(.vertical, 2)
@@ -203,63 +188,43 @@ struct ArtistsListView: View {
 struct AlbumDetailView: View {
     @EnvironmentObject var player: AudioPlayerService
     let album: AlbumGroup
-    @Binding var showNowPlaying: Bool
 
     var body: some View {
         List {
-            // Header
             AlbumHeaderView(album: album)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
 
-            // Play / Shuffle buttons
             HStack(spacing: 12) {
-                playButton
-                shuffleButton
+                Button {
+                    player.play(track: album.tracks[0], queue: album.tracks, index: 0)
+                } label: {
+                    Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered).controlSize(.large)
+
+                Button {
+                    let shuffled = album.tracks.shuffled()
+                    player.play(track: shuffled[0], queue: shuffled, index: 0)
+                } label: {
+                    Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered).controlSize(.large)
             }
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
 
-            // Tracks
             ForEach(Array(album.tracks.enumerated()), id: \.element.id) { idx, track in
                 AlbumTrackRow(track: track, index: idx + 1,
                               isPlaying: player.currentTrack?.id == track.id && player.isPlaying)
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        player.play(track: track, queue: album.tracks, index: idx)
-                        showNowPlaying = true
-                    }
+                    .onTapGesture { player.play(track: track, queue: album.tracks, index: idx) }
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             }
         }
         .listStyle(.plain)
         .navigationTitle(album.title)
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var playButton: some View {
-        Button {
-            player.play(track: album.tracks[0], queue: album.tracks, index: 0)
-            showNowPlaying = true
-        } label: {
-            Label("Play", systemImage: "play.fill")
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-    }
-
-    private var shuffleButton: some View {
-        Button {
-            let shuffled = album.tracks.shuffled()
-            player.play(track: shuffled[0], queue: shuffled, index: 0)
-            showNowPlaying = true
-        } label: {
-            Label("Shuffle", systemImage: "shuffle")
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
     }
 }
 
@@ -271,14 +236,10 @@ struct AlbumHeaderView: View {
         VStack(spacing: 12) {
             Group {
                 if let img {
-                    Image(uiImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
+                    Image(uiImage: img).resizable().aspectRatio(contentMode: .fit)
                 } else {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(.systemGray5))
-                        .overlay(Image(systemName: "music.note")
-                            .font(.largeTitle).foregroundColor(.secondary))
+                    RoundedRectangle(cornerRadius: 8).fill(Color(.systemGray5))
+                        .overlay(Image(systemName: "music.note").font(.largeTitle).foregroundColor(.secondary))
                 }
             }
             .frame(maxWidth: 220)
@@ -315,16 +276,12 @@ struct AlbumTrackRow: View {
                     .foregroundColor(isPlaying ? .accentColor : .primary)
                     .lineLimit(1)
                 if track.artist != track.album {
-                    Text(track.artist)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+                    Text(track.artist).font(.subheadline).foregroundColor(.secondary).lineLimit(1)
                 }
             }
             Spacer()
             if isPlaying {
-                Image(systemName: "waveform")
-                    .foregroundColor(.accentColor)
+                Image(systemName: "waveform").foregroundColor(.accentColor)
                     .symbolEffect(.variableColor.iterative)
             }
         }
@@ -336,16 +293,12 @@ struct AlbumTrackRow: View {
 struct ArtistDetailView: View {
     @EnvironmentObject var player: AudioPlayerService
     let artist: ArtistGroup
-    @Binding var showNowPlaying: Bool
 
     var body: some View {
         List(Array(artist.tracks.enumerated()), id: \.element.id) { idx, track in
             SongRow(track: track, isPlaying: player.currentTrack?.id == track.id && player.isPlaying)
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    player.play(track: track, queue: artist.tracks, index: idx)
-                    showNowPlaying = true
-                }
+                .onTapGesture { player.play(track: track, queue: artist.tracks, index: idx) }
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
         }
         .listStyle(.plain)
@@ -363,15 +316,12 @@ struct ArtworkThumbnail: View {
     var body: some View {
         Group {
             if let img {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                Image(uiImage: img).resizable().aspectRatio(contentMode: .fill)
             } else {
                 RoundedRectangle(cornerRadius: size * 0.12)
                     .fill(Color(.systemGray5))
                     .overlay(Image(systemName: "music.note")
-                        .font(.system(size: size * 0.35))
-                        .foregroundColor(.secondary))
+                        .font(.system(size: size * 0.35)).foregroundColor(.secondary))
             }
         }
         .frame(width: size, height: size)
@@ -391,15 +341,12 @@ struct ArtworkView: View {
     var body: some View {
         Group {
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
             } else {
                 RoundedRectangle(cornerRadius: size * 0.1)
                     .fill(Color(.systemGray5))
                     .overlay(Image(systemName: "music.note")
-                        .font(.system(size: size * 0.4))
-                        .foregroundColor(.secondary))
+                        .font(.system(size: size * 0.4)).foregroundColor(.secondary))
             }
         }
         .frame(width: size, height: size)
