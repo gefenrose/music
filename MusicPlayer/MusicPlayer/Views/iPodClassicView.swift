@@ -100,6 +100,12 @@ struct iPodClassicView: View {
 
     func screenHeight(_ g: GeometryProxy) -> CGFloat { g.size.height * 0.525 }
 
+    func statusBarHeight() -> CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.statusBarManager?.statusBarFrame.height ?? 44
+    }
+
     // MARK: - Screen content
 
     @ViewBuilder
@@ -116,7 +122,7 @@ struct iPodClassicView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0) {
                     // Push list below status bar
-                    Color.clear.frame(height: geo.safeAreaInsets.top)
+                    Color.clear.frame(height: max(geo.safeAreaInsets.top, statusBarHeight()))
 
                     if library.isLoading {
                         ProgressView()
@@ -268,7 +274,15 @@ struct iPodClassicView: View {
     }
 
     func handleScroll(_ delta: CGFloat) {
-        guard !menuItems.isEmpty, currentPage != .nowPlaying else { return }
+        if currentPage == .nowPlaying {
+            // Clockwise (positive delta) = seek back; counter-clockwise = forward
+            // One full rotation (2π) ≈ 30 seconds
+            let seekDelta = -delta * (30.0 / (.pi * 2))
+            let newTime = max(0, min(player.duration, player.currentTime + seekDelta))
+            player.seek(to: newTime)
+            return
+        }
+        guard !menuItems.isEmpty else { return }
         scrollAccum += delta
         let threshold: CGFloat = 0.18
         while abs(scrollAccum) >= threshold {
