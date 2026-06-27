@@ -87,6 +87,10 @@ struct iPodClassicView: View {
                         )
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // ── Home indicator safe area ─────────────────────────
+                Color.black.frame(height: geo.safeAreaInsets.bottom > 0
+                    ? geo.safeAreaInsets.bottom : 20)
             }
         }
         .background(Color.black)
