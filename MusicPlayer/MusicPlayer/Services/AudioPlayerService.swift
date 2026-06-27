@@ -30,9 +30,12 @@ class AudioPlayerService: NSObject, ObservableObject {
     private func setupAudioSession() {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("Audio session error: \(error)")
+            print("Audio session category error: \(error)")
+        }
+        // Activate off the main thread to avoid UI unresponsiveness warning
+        Task.detached {
+            try? AVAudioSession.sharedInstance().setActive(true)
         }
     }
 
