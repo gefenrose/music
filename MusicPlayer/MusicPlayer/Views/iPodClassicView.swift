@@ -89,8 +89,7 @@ struct iPodClassicView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // ── Home indicator safe area ─────────────────────────
-                Color.black.frame(height: geo.safeAreaInsets.bottom > 0
-                    ? geo.safeAreaInsets.bottom : 20)
+                Color.black.frame(height: bottomSafeArea())
             }
         }
         .background(Color.black)
@@ -109,6 +108,12 @@ struct iPodClassicView: View {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first?.statusBarManager?.statusBarFrame.height ?? 44
+    }
+
+    func bottomSafeArea() -> CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.bottom ?? 20
     }
 
     // MARK: - Screen content
