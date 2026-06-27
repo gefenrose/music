@@ -89,6 +89,7 @@ struct iPodClassicView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .background(Color.black)
         .ignoresSafeArea()
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(lastFM)
