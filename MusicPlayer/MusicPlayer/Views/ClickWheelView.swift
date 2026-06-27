@@ -134,7 +134,7 @@ struct ClickWheelView: View {
         if startLocation == nil { startLocation = v.location; totalRotation = 0 }
 
         if dist > innerR + 6 {
-            // Ring – scroll
+            // Ring – scroll or tap
             let angle = atan2(dy, dx)
             if let last = lastAngle {
                 var delta = angle - last
@@ -142,9 +142,19 @@ struct ClickWheelView: View {
                 if delta < -.pi { delta += 2 * .pi }
                 totalRotation += delta
                 onScroll(delta)
+                pressedRegion = nil
+            } else {
+                // First touch on ring – highlight the button region
+                let deg  = angle * 180 / .pi
+                let norm = deg < 0 ? deg + 360 : deg
+                switch norm {
+                case 225..<315:         pressedRegion = .top
+                case 315...360, 0..<45: pressedRegion = .right
+                case 45..<135:         pressedRegion = .bottom
+                default:               pressedRegion = .left
+                }
             }
-            lastAngle     = angle
-            pressedRegion = nil
+            lastAngle = angle
         } else {
             pressedRegion = .center
             lastAngle     = nil
@@ -167,10 +177,10 @@ struct ClickWheelView: View {
                 let deg  = atan2(dy, dx) * 180 / .pi
                 let norm = deg < 0 ? deg + 360 : deg
                 switch norm {
-                case 315...360, 0..<45: onMenu()
-                case 45..<135:          onNext()
-                case 135..<225:         onPlayPause()
-                default:                onPrevious()
+                case 225..<315:         onMenu()      // top
+                case 315...360, 0..<45: onNext()      // right  (>>|)
+                case 45..<135:          onPlayPause() // bottom (▶⏸)
+                default:                onPrevious()  // left   (|<<)
                 }
             }
         }

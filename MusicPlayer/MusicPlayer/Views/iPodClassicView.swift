@@ -275,11 +275,10 @@ struct iPodClassicView: View {
 
     func handleScroll(_ delta: CGFloat) {
         if currentPage == .nowPlaying {
-            // Clockwise (positive delta) = seek back; counter-clockwise = forward
-            // One full rotation (2π) ≈ 30 seconds
-            let seekDelta = -delta * (30.0 / (.pi * 2))
-            let newTime = max(0, min(player.duration, player.currentTime + seekDelta))
-            player.seek(to: newTime)
+            // Classic iPod: clockwise = volume up, counter-clockwise = volume down
+            // One full rotation (2π) covers the full 0-1 volume range
+            let newVol = max(0, min(1, player.volume + Float(delta / (.pi * 2))))
+            player.setVolume(newVol)
             return
         }
         guard !menuItems.isEmpty else { return }
@@ -298,8 +297,12 @@ struct iPodClassicView: View {
 
     func handlePrevious() {
         impact(.medium)
-        if currentPage == .nowPlaying { player.previous() }
-        else { setSelected(max(0, selectedIndex - 1)) }
+        if currentPage == .nowPlaying {
+            if player.currentTime > 3 { player.seek(to: 0) }
+            else { player.previous() }
+        } else {
+            setSelected(max(0, selectedIndex - 1))
+        }
     }
 
     func handleNext() {
