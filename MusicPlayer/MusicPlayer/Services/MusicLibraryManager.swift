@@ -34,7 +34,7 @@ class MusicLibraryManager: ObservableObject {
 
     func loadLibrary() {
         isLoading = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self] in
             // System music library (requires authorization)
             var libraryTracks: [Track] = []
             if MPMediaLibrary.authorizationStatus() == .authorized {
@@ -45,8 +45,8 @@ class MusicLibraryManager: ObservableObject {
                 }
             }
 
-            // Imported local files (always available)
-            let localTracks = Self.scanLocalFiles()
+            // Imported local files (async metadata loading, no deprecated APIs)
+            let localTracks = await Self.scanLocalFiles()
 
             let allTracks = (libraryTracks + localTracks).sorted { $0.title < $1.title }
 
@@ -65,7 +65,7 @@ class MusicLibraryManager: ObservableObject {
                 ArtistGroup(id: name, name: name, tracks: value.sorted { $0.title < $1.title })
             }.sorted { $0.name < $1.name }
 
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self?.songs = allTracks
                 self?.albums = albumGroups
                 self?.artists = artistGroups
@@ -74,9 +74,8 @@ class MusicLibraryManager: ObservableObject {
         }
     }
 
-    // Copy files from document picker URLs into app Documents, then reload.
     func importFiles(from urls: [URL]) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self] in
             for url in urls {
                 let accessing = url.startAccessingSecurityScopedResource()
                 defer { if accessing { url.stopAccessingSecurityScopedResource() } }
@@ -90,26 +89,29 @@ class MusicLibraryManager: ObservableObject {
                     print("Import failed for \(url.lastPathComponent): \(error)")
                 }
             }
-            DispatchQueue.main.async { self?.loadLibrary() }
+            await MainActor.run { self?.loadLibrary() }
         }
     }
 
     func deleteLocalFile(track: Track) {
         guard let url = track.assetURL, track.id.hasPrefix("local:") else { return }
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self] in
             try? FileManager.default.removeItem(at: url)
-            DispatchQueue.main.async { self?.loadLibrary() }
+            await MainActor.run { self?.loadLibrary() }
         }
     }
 
-    private static func scanLocalFiles() -> [Track] {
+    private static func scanLocalFiles() async -> [Track] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: documentsURL,
             includingPropertiesForKeys: nil,
             options: .skipsHiddenFiles
         )) ?? []
-        return files
-            .filter { audioExtensions.contains($0.pathExtension.lowercased()) }
-            .map { Track(fileURL: $0) }
+        let audioFiles = files.filter { audioExtensions.contains($0.pathExtension.lowercased()) }
+        var tracks: [Track] = []
+        for url in audioFiles {
+            await tracks.append(Track(fileURL: url))
+        }
+        return tracks
     }
 }

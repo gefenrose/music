@@ -25,9 +25,8 @@ struct Track: Identifiable, Equatable {
         self.localArtwork = nil
     }
 
-    // From an imported file in the Documents directory
-    // Must be called on a background thread (AVAsset loads synchronously).
-    init(fileURL: URL) {
+    // From an imported file — uses the modern async AVAsset load() API (no deprecation warnings).
+    init(fileURL: URL) async {
         self.id = "local:" + fileURL.lastPathComponent
         self.assetURL = fileURL
         self.artwork = nil
@@ -38,17 +37,20 @@ struct Track: Identifiable, Equatable {
         var album = "Unknown Album"
         var artworkImage: UIImage?
 
-        for item in asset.commonMetadata {
+        let metadata = (try? await asset.load(.commonMetadata)) ?? []
+        for item in metadata {
             guard let key = item.commonKey else { continue }
             switch key {
             case .commonKeyTitle:
-                if let v = item.value as? String { title = v }
+                title = (try? await item.load(.stringValue)) ?? title
             case .commonKeyArtist:
-                if let v = item.value as? String { artist = v }
+                artist = (try? await item.load(.stringValue)) ?? artist
             case .commonKeyAlbumName:
-                if let v = item.value as? String { album = v }
+                album = (try? await item.load(.stringValue)) ?? album
             case .commonKeyArtwork:
-                if let data = item.value as? Data { artworkImage = UIImage(data: data) }
+                if let data = try? await item.load(.dataValue) {
+                    artworkImage = UIImage(data: data)
+                }
             default:
                 break
             }
@@ -57,7 +59,9 @@ struct Track: Identifiable, Equatable {
         self.title = title
         self.artist = artist
         self.album = album
-        let d = asset.duration.seconds
+
+        let cmDuration = try? await asset.load(.duration)
+        let d = cmDuration.map { CMTimeGetSeconds($0) } ?? 0
         self.duration = d.isFinite && d > 0 ? d : 0
         self.localArtwork = artworkImage
     }
