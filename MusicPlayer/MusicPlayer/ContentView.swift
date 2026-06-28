@@ -11,11 +11,6 @@ struct ContentView: View {
         TabView {
             LibraryView()
                 .tabItem { Label("Library", systemImage: "music.note.list") }
-
-            SettingsView()
-                .environmentObject(lastFM)
-                .environmentObject(library)
-                .tabItem { Label("Settings", systemImage: "gear") }
         }
         .safeAreaInset(edge: .bottom) {
             if player.currentTrack != nil {

@@ -38,6 +38,7 @@ struct LibraryView: View {
 
     @State private var tab: LibraryTab = .songs
     @State private var searchText = ""
+    @State private var showSettings = false
 
     @AppStorage("viewMode.songs")   private var songsModeRaw:   String = LibraryViewMode.list.rawValue
     @AppStorage("viewMode.albums")  private var albumsModeRaw:  String = LibraryViewMode.grid.rawValue
@@ -88,9 +89,19 @@ struct LibraryView: View {
             }
             .navigationTitle("Library")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gear")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     ViewModePicker(mode: currentModeBinding)
                 }
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+                    .environmentObject(lastFM)
+                    .environmentObject(library)
             }
             .searchable(text: $searchText, prompt: "Search")
         }
